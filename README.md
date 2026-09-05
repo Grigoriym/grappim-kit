@@ -46,3 +46,6 @@ against the Sonatype Central Portal. Required repo secrets:
 
 To publish locally instead, set the same names as `ORG_GRADLE_PROJECT_*` properties in
 `~/.gradle/gradle.properties` and run `./gradlew publishToMavenCentral`.
+
+After a successful publish, `repo1.maven.org` can take a few minutes to sync — a 404
+there right after CI reports success isn't a failure, just CDN lag.
