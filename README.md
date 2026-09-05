@@ -12,13 +12,15 @@ this repo is the extraction itself.
 
 ## Distribution
 
-Published to Maven Central under the `click.gregstuff` group id (namespace verified via
-a DNS TXT record on `gregstuff.click`), because both `wallosmobile` and `TaigaMobileNova`
-ship F-Droid builds and GitHub Packages isn't on F-Droid's trusted-source allowlist.
+Published to Maven Central under the `io.github.grigoriym` group id (verified automatically
+via GitHub OAuth on the Central Portal, no DNS step needed), because both `wallosmobile` and
+`TaigaMobileNova` ship F-Droid builds and GitHub Packages isn't on F-Droid's trusted-source
+allowlist. Kotlin source stays under the `com.grappim.*` package regardless — the Maven
+group id (publishing namespace) and the Kotlin package are independent.
 
 ```kotlin
 dependencies {
-    implementation("click.gregstuff:grappim-kit-<module>:<version>")
+    implementation("io.github.grigoriym:grappim-kit-<module>:<version>")
 }
 ```
 

@@ -1,4 +1,4 @@
-package click.gregstuff.grappimkit.placeholder
+package com.grappim.kit.placeholder
 
 /**
  * Bootstrap-only. Exists to give the grappim-kit -> Maven Central publish pipeline
