@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 include(":navigation")
 include(":logger")
 include(":coroutines")
+include(":domain")
