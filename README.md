@@ -28,9 +28,12 @@ One shared version number covers the whole repo (see the plan doc for why).
 
 ## Modules
 
-- `placeholder` — bootstrap-only module proving out the publish pipeline (namespace
-  verification, signing, CI). Not a real dependency; superseded once `core/navigation`
-  (the first real extraction) publishes.
+- `navigation` (`grappim-kit-navigation`) — dual back-stack Navigation 3 wrapper
+  (`Navigator`/`NavigationState`, class-keyed sub-stacks so a top-level route can carry a
+  payload) plus a hand-rolled `ResultBus` for cross-screen results. Reconciled from
+  `core/navigation` across `wallosmobile`/`wayprint`/`TaigaMobileNova` — Taiga's version had
+  diverged from the other two (tablet support), so this ships Taiga's richer API rather than
+  the two-app-identical one. Targets: `android`, `jvm`, `iosArm64`, `iosSimulatorArm64`.
 
 ## Publishing
 

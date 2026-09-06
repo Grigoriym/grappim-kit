@@ -15,4 +15,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":placeholder")
+include(":navigation")
