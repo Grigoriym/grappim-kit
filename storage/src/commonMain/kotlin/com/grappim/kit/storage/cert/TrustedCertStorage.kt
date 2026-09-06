@@ -24,14 +24,19 @@ interface TrustedCertStorage {
 }
 
 /**
- * Takes the `DataStore<Preferences>` as a constructor param rather than building one itself: a
- * consuming app already owns a DataStore file/builder for its own settings, and this stores its
- * one key (`trusted_certs`) into whichever store the app passes in.
+ * Takes the `DataStore<Preferences>` and `Json` as constructor params rather than building them
+ * itself: a consuming app already owns a DataStore file/builder for its own settings and likely
+ * its own `Json` instance, and this stores its one key (`trusted_certs`) into whichever store the
+ * app passes in — no DI-framework annotation, same DI-agnostic shape every other `grappim-kit`
+ * class uses.
  *
  * Stores the full `PendingCertTrust` JSON-encoded, not just `host|fingerprint`: a settings screen
  * revoking a pin needs the subject/issuer/validity fields to show what it's revoking.
  */
-class TrustedCertStorageImpl(private val dataStore: DataStore<Preferences>) : TrustedCertStorage {
+class TrustedCertStorageImpl(
+    private val dataStore: DataStore<Preferences>,
+    private val json: Json = Json { ignoreUnknownKeys = true }
+) : TrustedCertStorage {
 
     private val trustedEntriesFlow: Flow<List<PendingCertTrust>> =
         dataStore.data.map { prefs -> decodeEntries(prefs[KEY_TRUSTED_CERTS]) }
@@ -64,6 +69,5 @@ class TrustedCertStorageImpl(private val dataStore: DataStore<Preferences>) : Tr
 
     private companion object {
         private val KEY_TRUSTED_CERTS = stringPreferencesKey("trusted_certs")
-        private val json = Json { ignoreUnknownKeys = true }
     }
 }
