@@ -28,3 +28,33 @@ originally-planned `click.gregstuff`).
 
 After a CI publish reports success, `repo1.maven.org` can take a few minutes to reflect
 it — don't read an immediate 404 there as a failed publish.
+
+## Local build setup
+
+`local.properties` (gitignored) needs `sdk.dir=/home/gregory/Android/Sdk` for any module
+with an Android target — not created automatically like it is in the four app repos.
+
+## Adding a KMP+Compose module (first done for `navigation`, step 8)
+
+A module needing Android + Compose Multiplatform (not just `placeholder`'s bare `jvm()`)
+needs, in its `build.gradle.kts`:
+
+- `alias(libs.plugins.android.kotlin.multiplatform.library)`, `alias(libs.plugins.jetbrains.compose)`,
+  `alias(libs.plugins.jetbrains.compose.compiler)`, applied at the root `build.gradle.kts`
+  too (as `apply false`).
+- `kotlin { androidLibrary { namespace = ...; compileSdk = ...; minSdk = ... } }`. AGP
+  9.4.0 warns this block is deprecated in favor of `android { }`, but the four source
+  apps (`TaigaMobileNova`, same AGP version) still use `androidLibrary { }` too as of
+  2026-09-06 — matching upstream's current pattern, not a bug to fix here.
+- This AGP version's `com.android.kotlin.multiplatform.library` plugin has a single
+  `main`/`android` variant, not a debug/release split — task names are
+  `compileAndroidMain`, `publishAndroidPublicationToMavenCentralRepository`, not
+  `compileReleaseKotlinAndroid`. Vanniktech's `KotlinMultiplatform(androidVariantsToPublish
+  = listOf("release"))` still configures and generates POM/metadata without error despite
+  the variant actually being named `main` — untested whether `"release"` vs. `"main"`
+  changes anything real; if a future publish run complains about the variant name, try
+  `"main"` first.
+- A `Compose Multiplatform runtime dependencies' versions don't match with plugin
+  version` warning (expected `ui:1.12.0`, actual `ui:1.10.1`) is expected noise from
+  `navigation3-ui:1.1.1` pulling an older compose-ui transitively — same version pairing
+  the source apps use themselves, not something introduced here. Harmless; don't chase it.
