@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 }
 
 include(":navigation")
+include(":logger")
