@@ -10,7 +10,10 @@ package com.grappim.kit.domain
  * `CertificateException`, which the TLS stack then wraps again on its way out, so this travels
  * as a cause somewhere down that chain — [findPendingCertTrust] is how it is read back.
  */
-class UntrustedCertificateException(val pendingCertTrust: PendingCertTrust) : Exception()
+class UntrustedCertificateException(
+    val pendingCertTrust: PendingCertTrust,
+    override val cause: Throwable? = null
+) : Exception()
 
 /**
  * Walks the cause chain for an [UntrustedCertificateException]. Matching on the caught type

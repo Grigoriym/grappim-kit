@@ -12,8 +12,10 @@ coroutines = "1.11.0"
 timber = "5.0.1"
 atomicfu = "0.33.0"
 kotlinxSerialization = "1.11.0"
+androidxDatastore = "1.2.1"
 
 [libraries]
+androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidxDatastore" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 kotlinx-atomicfu = { module = "org.jetbrains.kotlinx:atomicfu", version.ref = "atomicfu" }

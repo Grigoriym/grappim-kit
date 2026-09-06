@@ -15,24 +15,30 @@ kotlin {
     iosSimulatorArm64()
 
     androidLibrary {
-        namespace = "com.grappim.kit.testing"
+        namespace = "com.grappim.kit.storage"
         compileSdk = libs.versions.compileSdk.get().toInt()
         minSdk = libs.versions.minSdk.get().toInt()
     }
 
     sourceSets {
         commonMain.dependencies {
-            // `configureTests()`-style consumers put this module on every other module's
-            // `commonTest`, so `runTest` reaches them through here rather than being declared
-            // per module.
-            api(libs.kotlinx.coroutines.test)
-
-            // `FakeCrashReporter`/`FakeAppInfoProvider`/`FakeNetworkMonitor`/`FakeTrustedCertStorage`/
-            // `FakeSecretCipher` implement these -- consumers resolve the interfaces through here,
-            // same shape the source apps' own `:testing` used.
-            api(project(":crash"))
-            api(project(":appinfo"))
-            api(project(":storage"))
+            api(project(":domain"))
+            implementation(libs.androidx.datastore.preferences.core)
+            implementation(libs.kotlinx.serialization.json)
+        }
+        androidMain.dependencies {
+            implementation(project(":logger"))
+        }
+        jvmMain.dependencies {
+            implementation(project(":logger"))
+            implementation(project(":coroutines"))
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+        }
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }

@@ -7,32 +7,30 @@ plugins {
     alias(libs.plugins.vanniktech.publish)
 }
 
+// jvm() + androidLibrary only, deliberately no iOS targets: X509ExtendedTrustManager/javax.net.ssl
+// don't exist there, and neither source app's own version of this class was ever KMP-common —
+// each shipped an identical androidMain/jvmMain copy, which this module mirrors.
 kotlin {
     jvmToolchain(21)
 
     jvm()
-    iosArm64()
-    iosSimulatorArm64()
 
     androidLibrary {
-        namespace = "com.grappim.kit.testing"
+        namespace = "com.grappim.kit.trustmanager"
         compileSdk = libs.versions.compileSdk.get().toInt()
         minSdk = libs.versions.minSdk.get().toInt()
     }
 
     sourceSets {
         commonMain.dependencies {
-            // `configureTests()`-style consumers put this module on every other module's
-            // `commonTest`, so `runTest` reaches them through here rather than being declared
-            // per module.
-            api(libs.kotlinx.coroutines.test)
-
-            // `FakeCrashReporter`/`FakeAppInfoProvider`/`FakeNetworkMonitor`/`FakeTrustedCertStorage`/
-            // `FakeSecretCipher` implement these -- consumers resolve the interfaces through here,
-            // same shape the source apps' own `:testing` used.
-            api(project(":crash"))
-            api(project(":appinfo"))
-            api(project(":storage"))
+            api(project(":domain"))
+            implementation(project(":storage"))
+            implementation(libs.kotlinx.coroutines.core)
+        }
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(project(":testing"))
         }
     }
 }
