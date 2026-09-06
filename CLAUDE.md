@@ -58,3 +58,22 @@ needs, in its `build.gradle.kts`:
   version` warning (expected `ui:1.12.0`, actual `ui:1.10.1`) is expected noise from
   `navigation3-ui:1.1.1` pulling an older compose-ui transitively — same version pairing
   the source apps use themselves, not something introduced here. Harmless; don't chase it.
+
+## Porting a `commonTest` from a source app (found extracting `logger`/`coroutines`/`domain`)
+
+- Kotlin/Native (the `iosArm64`/`iosSimulatorArm64` test compile) rejects a comma inside a
+  backtick-quoted test function name — `` `exception thrown, not propagated`() `` fails
+  `compileTestKotlinIosArm64` with `Name contains illegal characters: ","`, even though the
+  same name compiles fine on `jvm`. The source apps' tests were never compiled for iOS, so
+  this only surfaces once a ported test runs on a real Kotlin/Native target. Fix: reword the
+  name without a comma — don't drop the iOS target instead.
+- A module whose extracted logic depended on a per-app Koin-annotated DI module in the
+  source app (seen in `core/async-kmp`) is ported as plain functions/objects here, not with
+  the Koin annotations — see `SHARED_LIBRARY_PLAN.md`'s "Step 8b" section for the reasoning
+  (avoids pulling KSP + Koin Annotations into this repo for a handful of one-line
+  providers). Each consuming app binds the plain API into its own Koin module.
+- Before porting a "verdict: extract wholesale" module from `SHARED_LIBRARY_PLAN.md`,
+  re-list both source apps' directories rather than trusting the table's file list —
+  `core/logger` and `core/async-kmp` both turned out to have extra iOS/JVM files on Taiga's
+  side that the original wallosmobile-vs-Taiga diff pass (which only compared `commonMain`)
+  missed, same pattern step 8 already found for `core/navigation`.
