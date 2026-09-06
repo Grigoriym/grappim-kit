@@ -10,10 +10,12 @@ jetbrainsSavedState = "1.4.0"
 jetbrainsAndroidxLifecycle = "2.11.0"
 coroutines = "1.11.0"
 timber = "5.0.1"
+atomicfu = "0.33.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+kotlinx-atomicfu = { module = "org.jetbrains.kotlinx:atomicfu", version.ref = "atomicfu" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 jetbrains-compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "jetbrainsComposeMultiplatform" }
 jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "jetbrainsNav3" }

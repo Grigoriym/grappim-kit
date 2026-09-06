@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 include(":navigation")
 include(":logger")
+include(":coroutines")
