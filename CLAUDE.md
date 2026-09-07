@@ -77,3 +77,23 @@ needs, in its `build.gradle.kts`:
   `core/logger` and `core/async-kmp` both turned out to have extra iOS/JVM files on Taiga's
   side that the original wallosmobile-vs-Taiga diff pass (which only compared `commonMain`)
   missed, same pattern step 8 already found for `core/navigation`.
+- A "reconcile, don't copy" verdict on exception-throwing code needs a check the plan
+  doesn't always spell out: what does each source app's own exception type actually
+  extend? Porting `core/api`'s `CompositeTrustManager` (step 8d), TaigaMobileNova's
+  `UntrustedCertificateException`/`CertificateHostnameMismatchException` extend
+  `java.security.cert.CertificateException` directly, which is *why* their
+  `checkServerTrusted` can throw them bare and still satisfy the JSSE
+  `X509TrustManager` contract. `grappim-kit-domain`'s versions are deliberately plain
+  commonMain `Exception`s instead (the whole reason they're portable to iOS/JVM-common
+  code at all), so copying Taiga's bare-throw pattern onto them silently breaks that
+  contract. Only 3 failing ported tests caught it — nothing about the code looks wrong
+  by inspection. Fix: wrap at the JSSE throw site instead
+  (`throw CertificateException(UntrustedCertificateException(...))`), matching
+  wallosmobile's original wrapping style; a caller reads the real exception back via
+  `findPendingCertTrust()`/the `cause` chain.
+- Kotlin's compiler (2.4.10) treats `x is Y` as a compile *error* — "Check for instance
+  is always 'false'" — not a warning, when `Y` is statically unrelated to `x`'s type.
+  A ported test asserting `exception is SomeUnrelatedType` (a pattern that compiled
+  fine in the source app) will fail to compile here if reconciliation changed what the
+  thrown type actually is. Rewrite the assertion around the real type relationship
+  instead of the source app's, don't just delete the check.
