@@ -57,6 +57,29 @@ divergence over wallosmobile/wayprint's narrower identical version — see
     check the app's actual route definitions before assuming this is safe, don't infer
     it from the type-checker alone.
 
+- **wallosmobile/wayprint's `goToTopLevel()` has the *pre-fix* shape of the same bug
+  0.1.1 fixed for TaigaMobileNova — but confirm with the app owner before treating that
+  as a bug to silently fix on swap, since it may be relied-on behavior.** Found
+  2026-09-08 during wallosmobile's own swap: wallosmobile's `Navigator.goToTopLevel()`
+  pushes onto `topLevelStack` on every drawer-section switch (same push-not-replace
+  shape as `grappim-kit-navigation:0.1.0`'s bug), so switching sections grows the stack
+  and `goBack()`/`canGoBack()` cascade back through every previously-visited section
+  before falling through to system back — and wallosmobile's own `NavigatorTest.kt`
+  (`` `canGoBack is false only at the start destination` ``) asserts this growing
+  behavior as intended, not as a bug. `grappim-kit-navigation` (both 0.1.0 and 0.1.1)
+  never had this test — 0.1.1's version always *replaces* the top-level stack's single
+  entry, so back at any section's root is unhandled (system back/exit) instead of
+  cycling through visited sections. Swapping wallosmobile onto `grappim-kit-navigation`
+  therefore changes real back-button UX across drawer sections, not just internals —
+  this is a product decision, not a mechanical migration detail. wallosmobile's own
+  `docs/IMPLEMENTATION_PLAN.md` §5.4 says navigation was ported verbatim from
+  MealieMobile with no independent design discussion, so this reads as an inherited
+  quirk rather than a deliberate wallosmobile choice — but that's circumstantial, not a
+  green light to change it unasked. **Resolve with the app owner before landing a swap
+  that changes this**, and update this section with the actual decision + rationale
+  once made, so wayprint's swap (identical starting point) doesn't reopen the same
+  question from scratch.
+
 ## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
