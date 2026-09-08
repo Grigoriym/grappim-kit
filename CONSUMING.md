@@ -36,6 +36,27 @@ divergence over wallosmobile/wayprint's narrower identical version — see
   per the standing rule above, instead of trusting the extraction verdict. If you're
   depending on `0.1.0`, upgrade to `0.1.1`+ before relying on drawer/section navigation.
 
+- **wallosmobile/wayprint: this is not a mechanical swap the way it was for
+  TaigaMobileNova.** TaigaMobileNova's `core/navigation` was the canonical source this
+  module was extracted from; wallosmobile's/wayprint's own `core/navigation` (identical
+  to each other) is the older, narrower API this module's design superseded. Confirmed
+  differences as of 2026-09-08 (wallosmobile `dev`):
+  - `NavigationState.subStacks` is `Map<NavKey, NavBackStack<NavKey>>` (instance-keyed)
+    in wallosmobile vs. `Map<KClass<out NavKey>, NavBackStack<NavKey>>` (class-keyed)
+    here — a real type change at every call site that constructs `NavigationState`, not
+    just an import rename.
+  - `Navigator.navigate()`/`goToTopLevel()` compare by instance equality
+    (`key == state.startKey`, `when (key) { state.currentTopLevelKey -> ... }`) in
+    wallosmobile vs. by `key::class` here throughout.
+  - No `replaceCurrent`/`resetTo`/`ResultBus` exist in wallosmobile's version at all —
+    additive, not a compatibility risk by itself.
+  - In practice, instance-keyed vs. class-keyed behave identically *if every top-level
+    route in the consuming app is a payload-less `data object`* (a singleton has only
+    one instance, so instance-equality and class-equality agree). The risk is
+    behavioral, not just a compile error, only if a top-level route carries a payload —
+    check the app's actual route definitions before assuming this is safe, don't infer
+    it from the type-checker alone.
+
 ## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
