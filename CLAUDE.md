@@ -98,24 +98,10 @@ needs, in its `build.gradle.kts`:
   thrown type actually is. Rewrite the assertion around the real type relationship
   instead of the source app's, don't just delete the check.
 
-## Consuming a published module from an app (found doing step 9, TaigaMobileNova/core/navigation)
+## Consuming a published module from an app
 
-**An extraction commit is a snapshot, not a live link — it can go stale between when it's cut
-and when it's published, and nothing here checks that automatically.** Before an app swaps its
-local module for the published one, diff the published module's actual `commonMain` source
-(read it from this repo at the extraction commit, or decompile the published artifact) against
-the *canonical* source app's current `dev`/`main` HEAD — not against whatever the extraction
-commit message claims it matched. Treat "verdict: canonical, should be a mechanical swap" as a
-claim to verify, not a fact to trust.
-
-Confirmed case: `grappim-kit-navigation:0.1.0`'s `Navigator.goToTopLevel()` shipped the back-stack
-bug TaigaMobileNova's own commit `e78fe61b` ("fix(nav): stop drawer section switches from growing
-the back stack") had already fixed on `dev` by the time `0.1.0` was published — extraction commit
-`608c54a` had snapshotted the file a day earlier. Everything else in that module (`NavigationState.kt`,
-`ResultBus.kt`) matched cleanly; only this one function drifted. A consuming-app agent that treated
-the swap as purely mechanical (rename imports, delete local module, done) would have silently
-reintroduced a regression that had just been fixed upstream.
-
-Apply this check every time a *different* app (wallosmobile, wayprint, HateItOrRateIt) does its own
-swap for this or any other module, not just the first one — a fix landing in the canonical source
-app between two apps' swap dates is the same failure mode again.
+Gotchas for an app swapping onto a published module live in `CONSUMING.md`, not here —
+that file ships with the library so any consuming app's session can find it without
+knowing this repo's planning history. If a step here (an extraction, a bug fix triggered
+by a consumer's report) produces a consumer-facing finding, write it there, one section
+per module. This file (`CLAUDE.md`) stays about developing `grappim-kit` itself.

@@ -34,6 +34,29 @@ One shared version number covers the whole repo (see the plan doc for why).
   `core/navigation` across `wallosmobile`/`wayprint`/`TaigaMobileNova` — Taiga's version had
   diverged from the other two (tablet support), so this ships Taiga's richer API rather than
   the two-app-identical one. Targets: `android`, `jvm`, `iosArm64`, `iosSimulatorArm64`.
+- `logger` (`grappim-kit-logger`) — tiny logcat-style logging facade (`KitLogger`/`logcat`)
+  with Timber/NSLog/file-rotation backends for Android, iOS, and JVM.
+- `coroutines` (`grappim-kit-coroutines`) — dispatcher providers, a crash-logging
+  `applicationScope()` factory, and a `ThreadSafeMap` utility. DI-framework-agnostic —
+  wire it into your own Koin/Hilt module.
+- `domain` (`grappim-kit-domain`) — cancellation-safe `Result` helpers (`resultOf`/
+  `mapResult`) and a certificate-pinning trust-decision model
+  (`PendingCertTrust`/`UntrustedCertificateException`).
+- `crash` (`grappim-kit-crash`) — `CrashReporter` interface, a seam a lower module can
+  depend on without pulling in a concrete crash SDK.
+- `appinfo` (`grappim-kit-appinfo`) — `AppInfoProvider` interface for build-time facts
+  (debug/F-Droid/version/build type) shared code can't read for itself.
+- `storage` (`grappim-kit-storage`) — `NetworkMonitor`, encrypted-string `SecretCipher`,
+  and DataStore-backed `TrustedCertStorage`.
+- `trustmanager` (`grappim-kit-trustmanager`) — `X509TrustManager` decorator combining
+  the device CA store with a trust-on-first-use `TrustedCertStorage` pin. `jvm`/`android`
+  only — `X509ExtendedTrustManager` has no iOS equivalent.
+- `testing` (`grappim-kit-testing`) — shared `kotlin.test` fakes and rules
+  (`MainDispatcherRule`, `FakeCrashReporter`, `FakeAppInfoProvider`, `FakeNetworkMonitor`,
+  `FakeTrustedCertStorage`, `FakeSecretCipher`).
+
+Swapping an app onto one of these? Check [CONSUMING.md](CONSUMING.md) for known
+integration gotchas first, one section per module.
 
 ## Publishing
 
