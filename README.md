@@ -54,6 +54,13 @@ One shared version number covers the whole repo (see the plan doc for why).
 - `testing` (`grappim-kit-testing`) — shared `kotlin.test` fakes and rules
   (`MainDispatcherRule`, `FakeCrashReporter`, `FakeAppInfoProvider`, `FakeNetworkMonitor`,
   `FakeTrustedCertStorage`, `FakeSecretCipher`).
+- `uikit` (`grappim-kit-uikit`) — `KitTheme`/`KitPreviewTheme` (Material3 theme scaffolding,
+  colors/typography supplied by the app), a hardened `SafeUriHandler`, top-bar widgets
+  (`TopBar`/`TopBarConfig`/`TopBarController`/`NavigationIconConfig`/`TopBarAction`), and
+  `NativeText` for deferred string resolution. No bundled strings or drawables — the app
+  supplies its own `ColorScheme`/`Typography` and every localized string (including the
+  `TopBar` Back/Menu content descriptions), the same way it already had to for every other
+  content description in this module.
 
 Swapping an app onto one of these? Check [CONSUMING.md](CONSUMING.md) for known
 integration gotchas first, one section per module.

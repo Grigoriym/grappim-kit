@@ -81,7 +81,49 @@ divergence over wallosmobile/wayprint's narrower identical version — see
   automatically wayprint's answer, even though both apps' current behavior and the fix's
   effect are identical.
 
+## uikit (`grappim-kit-uikit`)
+
+Reconciled from `wallosmobile`'s/`TaigaMobileNova`'s `uikit` theme scaffolding and top-bar
+widgets (see `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Step 6" section for the
+original per-field reconciliation call, and "Step 8f" for what changed extracting it).
+
+- **`KitTheme`/`KitPreviewTheme` take `lightColorScheme`/`darkColorScheme`/`typography` as
+  parameters — they don't exist as module-internal constants like each app's original
+  `Theme.kt` had them.** Brand colors and typography are correctly not shareable (each
+  app's own `Color.kt`/`Type.kt` stays where it is); the app builds its own
+  `ColorScheme`/`Typography` and passes them in, same shape as before, just as arguments
+  instead of hardcoded vals.
+- **`TopBar`'s Back/Menu content descriptions are caller-supplied
+  (`backContentDescription`/`menuContentDescription` params), not resolved from a bundled
+  string resource.** Every other content description in this module (`TopBarAction`,
+  `NavigationIconConfig.Custom`) already worked this way — only Back/Menu were special-cased
+  to reach into an app-bundled `stringResource(...)` before this port, which is exactly what
+  would have forced `grappim-kit` to set up its own Compose Multiplatform string-resource
+  generation. Making them caller-supplied too removes that requirement entirely and is more
+  consistent with the rest of the module, not a workaround. Typically only one call site (the
+  shell composable that renders `TopBar`) needs to supply these, not every screen.
+- **`KitPreviewTheme` only wires `LocalTopBarConfig`, not an offline/snackbar composition
+  local.** wallosmobile's own `WallosMobilePreviewTheme` (the richer of the two source
+  apps') also wires `LocalIsOffline`/`LocalSnackbarHostController` from its own
+  `widgets/network`/`widgets/snackbar` — TaigaMobileNova has neither, and they were never
+  diffed or decided as shareable. An app that needs those in its own previews should wrap
+  `KitPreviewTheme` in its own preview theme that adds them, rather than `grappim-kit`
+  silently growing app-specific composition locals.
+- **`RDrawable.kt` was *not* ported, despite `SHARED_LIBRARY_PLAN.md`'s original "extract
+  wholesale" verdict for it.** That verdict only compared file text (`typealias RDrawable =
+  Res.drawable`, identical in both apps) — but each app's `Res.drawable` points at that
+  app's *own* bundled drawables (wallosmobile's is just its own logo). There's nothing for
+  `grappim-kit` to bundle here; each app keeps its own one-line version of this pattern
+  locally.
+- **`NativeText` ships the richer union (TaigaMobileNova's: `Empty`/`Simple`/`Resource`/
+  `Arguments`/`Plural`/`Multi`), not wallosmobile's narrower one** — the established
+  richer-union pattern from every other "undersold drift" case in this project. Each
+  variant only ever holds an opaque `StringResource`/`PluralStringResource` pointer the
+  *app* generated; `NativeText` itself needs no resource generation. `getErrorMessage`
+  (each app's own exception→message mapping) was **not** ported — that's app-specific
+  business logic using each app's own exception types, not part of the shareable type.
+
 ## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
-Add a section here the first time one does, same shape as `navigation` above.
+Add a section here the first time one does, same shape as `navigation`/`uikit` above.

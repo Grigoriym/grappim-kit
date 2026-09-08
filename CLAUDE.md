@@ -97,6 +97,18 @@ needs, in its `build.gradle.kts`:
   fine in the source app) will fail to compile here if reconciliation changed what the
   thrown type actually is. Rewrite the assertion around the real type relationship
   instead of the source app's, don't just delete the check.
+- Inter-module dependencies in this repo's own build scripts use string-path
+  `project(":modulename")`, not Gradle's type-safe `projects.modulename` accessors —
+  `TYPESAFE_PROJECT_ACCESSORS` isn't enabled here (found extracting `uikit`, which needed
+  `project(":logger")`). `projects.x` fails with an unrelated-looking "receiver type
+  mismatch" against `TaskContainer.projects`, not a clear "accessors not enabled" error.
+- A `@Composable` extension function (e.g. `NativeText.asString()`) can't be called from
+  inside a non-inline lambda, even one passed to a stdlib collection function on the same
+  call stack — `list.joinToString { it.asString() }` fails with "@Composable invocations
+  can only happen from the context of a @Composable function" because `joinToString`'s
+  `transform` lambda isn't inline. An inline function's lambda body doesn't have this
+  problem (`buildString { list.forEach { append(it.asString()) } }` compiles fine, since
+  both `buildString` and `forEach` are inline) — or fall back to a plain imperative loop.
 
 ## Consuming a published module from an app
 
