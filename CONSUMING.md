@@ -266,3 +266,93 @@ this section covers the extraction shape, not swap findings.
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
 Add a section here the first time one does, same shape as `navigation`/`uikit` above.
+
+## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
+
+**Different consumption mechanism from every module above.** This isn't a Maven artifact —
+it's a Gradle convention-plugin composite build, consumed the same way each app already
+consumes its own local `build-logic/`: `pluginManagement { includeBuild("path/to/build-logic") }`
+in the consuming app's root `settings.gradle.kts`. Extracted 2026-09-09, not yet adopted by
+any app — building/committing this is unblocked, but swapping an app onto it (deleting that
+app's own local `build-logic/`) needs the same per-app "ask before switchover" gate as every
+other module (see `grappim-watcher/CLAUDE.md`'s `grappim-kit-build-only-until-told` note).
+
+**Scope: library-module conventions only, not the application module.** A fresh diff
+(2026-09-09) across wallosmobile/wayprint/TaigaMobileNova found the plan's original
+"7 files, byte-identical apart from package" verdict was too generous — only
+`KmpDiConventionPlugin`, `KmpSerializationConventionPlugin`, and `ProjectExtensions.kt` (the
+`Project.libs` accessor) are actually byte-identical across all three. Everything else that
+touches the *application* module (`AndroidApplicationConventionPlugin`, `AppBuildTypes`,
+`AppFlavors`, and `KotlinConfiguration.kt`'s `configureKotlinAndroid`/`configureKotlinJvm`,
+which only that plugin calls) is genuinely per-app — signing certs, flavor names, package
+suffixes — and was **not extracted**; each app keeps that part of its own `build-logic`.
+Only the *library*-module conventions (`KmpLibraryConventionPlugin`,
+`KmpLibraryComposeConventionPlugin`, `KmpLibraryStabilityConventionPlugin`,
+`KmpNetworkConventionPlugin`, plus their shared helpers) moved here.
+
+**The real finding: these convention plugins reach into each consuming app's own module
+tree by hardcoded path, which no runtime-code module extracted so far has done.**
+`KmpConfiguration.configureKmp()` hardcoded `implementation(project(":core:logger"))` in
+both source apps; `Quality.configureTests()` hardcoded `implementation(project(":testing"))`;
+`Quality.configureLinting()` hardcoded `"detektPlugins"(project(":detekt-rules"))`
+(wallosmobile-only — wayprint/TaigaMobileNova have no such module). A shared build-logic
+can't assume any of these paths exist — `:core:logger`/`:testing` are exactly the local
+modules this whole project is trying to retire in favor of `grappim-kit-logger`/
+`grappim-kit-testing`, and `:detekt-rules` never existed in two of the three apps. **Fixed
+by dropping every implicit injection**: the shared plugins no longer add any of these
+automatically. A module that needs `:core:logger` (or `grappim-kit-logger`, once swapped)
+declares it itself, like any other dependency — one extra explicit line per module, in
+exchange for not baking in an assumption that breaks the moment an app finishes migrating
+off its own local module.
+
+**Second real finding: `libs.findLibrary(...)` can't reach a consuming app's version
+catalog across an `includeBuild` from a separate repo.** Each app's own
+`build-logic/settings.gradle.kts` currently does
+`versionCatalogs { create("libs") { from(files("../gradle/libs.versions.toml")) } }` — a
+relative path that only works because `build-logic/` sits one level under that app's own
+root. Moved to a sibling repo, that path resolves to the wrong catalog entirely. Fixed the
+same way the already-published runtime modules already work: this `build-logic`'s own
+`settings.gradle.kts` points at **`grappim-kit`'s own** `gradle/libs.versions.toml`
+(`../gradle/libs.versions.toml`, one level up from `build-logic/`, same relative depth as
+each app), not any consuming app's. `grappim-kit`'s catalog gained the entries these
+plugins need (ktor, turbine, ktlint/detekt/kover gradle-plugin coordinates, compose-rules,
+the individual `jetbrains-compose-*` UI libraries, koin) as part of this extraction —
+versions copied from wallosmobile's/TaigaMobileNova's own catalogs (they already agreed on
+Kotlin 2.4.10 / AGP 9.4.0, matching what `grappim-kit` already used). A consuming app's
+*own* catalog is untouched by any of this — it keeps whatever versions it wants for its own
+application code; only this `build-logic`'s internal dependency versions come from
+`grappim-kit`'s catalog.
+
+**Every remaining per-app difference is a Gradle property, not a hardcoded value or a
+Kotlin constructor parameter** (the plugin classes are applied purely by id — 
+`plugins { id("com.grappim.kit.kmp.library") }` — with no call site to pass typed arguments
+to). Set once in the consuming app's own root `gradle.properties`, or per-module in that
+module's own `gradle.properties` where a module needs to differ from its app's default
+(Gradle resolves project properties per-project, closest one wins):
+
+| Property | Read by | Default | Notes |
+|---|---|---|---|
+| `grappimKitNamespacePrefix` | `kmp.library` | none (required) | e.g. `com.grappim.wallosmobile` |
+| `grappimKitAdditionalTargets` | `kmp.library` | none (Android-only) | comma-separated `jvm`,`ios` |
+| `grappimKitKoverExcludeAndroidUnitTests` | `kmp.library` | `false` | Taiga's shape once it adopts |
+| `grappimKitEnableAndroidHostTest` | `kmp.library` | `true` | set `false` once a module also has `jvm()` — Taiga's shape, avoids double-running the same tests |
+| `grappimKitExcludeFromLinting` | `kmp.library` | `false` | set per-module, e.g. on `:testing` |
+| `grappimKitExtraDetektRuleModule` | `kmp.library` | none | wallosmobile's `:detekt-rules`, e.g. `:detekt-rules` |
+| `grappimKitComposeStabilityConfigEnabled` | `kmp.library.compose`, `kmp.library.stability` | `false` | needs a `config/compose/stability_config.conf` in the consuming app — wallosmobile/wayprint have one, Taiga doesn't yet |
+
+`KmpNetworkConventionPlugin`/`ComposeStabilityMarker` don't take a targets property directly
+— they wire `androidMain`/`jvmMain`/`iosMain` dependencies via
+`sourceSets.matching {}.configureEach {}` instead of the typesafe `.jvmMain`/`.iosMain`
+accessors, since those throw if the module hasn't declared that target and this plugin has
+no way to know what `kmp.library`'s `grappimKitAdditionalTargets` was for this module.
+
+**Verified so far: compiles, plugin metadata validates (`./gradlew -p build-logic build`),
+and a throwaway smoke-test module applying all six plugins together built clean end-to-end
+in both shapes** (Android-only with `grappimKitEnableAndroidHostTest=true`, matching
+wallosmobile/wayprint's current build-logic; and Android+jvm+ios with
+`grappimKitEnableAndroidHostTest=false`, matching TaigaMobileNova's) — full
+`build`/`check`/`detekt`/`ktlint`/`koverVerify` pipeline green in both. **Not yet verified
+against a real app** — that needs an actual swap (deleting an app's own `build-logic/`,
+adding the properties above, adding the couple of explicit dependency lines the dropped
+implicit injections require), which is the next actionable, gated step whenever the user
+asks for it, same as every other module.
