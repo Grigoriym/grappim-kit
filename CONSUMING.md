@@ -245,6 +245,14 @@ behavior-preserving no-op:
   TaigaMobileNova's `uikit/.../theme/Theme.kt` (PR #394) for the worked example: it keeps its
   own `expect fun colorScheme(darkTheme: Boolean)` (Android dynamic-color branch included) and
   wraps it exactly this way in `TaigaMobileTheme`/`TaigaMobilePreviewTheme`.
+- **`ObserveAsEvents` (Compose helper for one-off event `Channel`/`Flow` consumption) was
+  added into `uikit` 2026-09-09**, not its own module — it was byte-identical (apart from
+  package) between wallosmobile's and TaigaMobileNova's `utils/ui`, alongside `uikit`'s
+  existing `SafeUriHandler` as a small general-purpose Compose utility, not a
+  theme/top-bar widget. wayprint has no `utils/` at all. Neither source app tested it, and
+  `grappim-kit` still has no Compose-UI-test infrastructure (see the `navigation` section's
+  `resetTo()` note), so no test was added here either — worth adding if/when that
+  infrastructure exists. Not yet swapped onto by any app.
 
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
