@@ -195,6 +195,42 @@ behavior-preserving no-op:
   own `expect fun colorScheme(darkTheme: Boolean)` (Android dynamic-color branch included) and
   wraps it exactly this way in `TaigaMobileTheme`/`TaigaMobilePreviewTheme`.
 
+## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
+
+Extracted 2026-09-09 from wallosmobile's and TaigaMobileNova's near byte-identical
+`AppUpdateChecker` (Play In-App Update wrapper). Not yet swapped onto by any app —
+this section covers the extraction shape, not swap findings.
+
+- **Three separate artifacts, not one module.** Unlike every other `grappim-kit` module,
+  the source apps split this into an interface plus two *build-variant-specific*
+  implementations (a real Play-Core-backed one for the Google Play distribution, a no-op
+  stub for F-Droid/non-Play). `grappim-kit`'s existing modules are single-artifact KMP
+  libraries with no product-flavor concept, so rather than invent a flavor-aware module (an
+  open question — the KMP Android library plugin's flavor support wasn't investigated),
+  this shipped as three plain artifacts: `grappim-kit-appupdate` (the `AppUpdateChecker`
+  interface + `UpdateState`), `grappim-kit-appupdate-gplay` (`api`-depends on `appupdate`,
+  adds `com.google.android.play:app-update-ktx`), `grappim-kit-appupdate-fdroid`
+  (`api`-depends on `appupdate`, no extra dependency). A consuming app's `gplayImplementation`
+  source set takes `-gplay`, its `fdroidImplementation`/equivalent takes `-fdroid` — same
+  shape as the two apps' own `androidApp/src/gplay`/`src/fdroid` split, just as separate
+  Maven coordinates instead of separate source sets in one module.
+- **Android-only, no `commonMain`.** `Activity` and the Play In-App Update APIs this models
+  don't exist off Android, and neither source app ever had this as KMP-common code either —
+  both kept it entirely inside their `androidApp` module. All three new modules declare only
+  an `androidLibrary` target, no `jvm()`/iOS.
+- **No Koin annotation on either impl**, matching the established convention from
+  `TrustedCertStorage`/`SecretCipher` (`storage`/`trustmanager` modules) — both source apps'
+  `@Single(binds = [AppUpdateChecker::class])` was dropped; a consuming app binds whichever
+  impl artifact it depends on into its own Koin module.
+- **HateItOrRateIt has its own `AppUpdateChecker`-shaped code but it's structurally
+  different** (no-arg methods, `@ActivityScoped`/`@Inject`, `ActivityContext`) because that
+  app runs Hilt/Dagger, not Koin like the other three (see grappim-watcher/CLAUDE.md's
+  cross-cutting-facts note) — it was deliberately left out of this extraction, not silently
+  dropped. Folding it in later means reconciling across the DI-framework boundary, not a
+  wholesale copy.
+- **wayprint has no equivalent at all** (FOSS-only distribution, no update-check need) —
+  nothing to reconcile there either.
+
 ## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
