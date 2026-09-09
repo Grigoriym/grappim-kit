@@ -112,7 +112,7 @@ divergence over wallosmobile/wayprint's narrower identical version — see
   sections keeps each one's history"), not a leak. Only `resetTo()`'s documented "forget
   everything, start fresh" contract was actually broken.
 
-  **The fix** (`navigation` module, commit range starting `<pending>`): `NavigationState`
+  **The fix** (`navigation` module, commit `cf31cce`): `NavigationState`
   gained a `resetGeneration: Int` counter; `resetTo()` now increments it in addition to its
   existing stack surgery; `toEntries()` wraps its whole per-section decoration step in
   `key(resetGeneration) { ... }`. A `key()` value change makes Compose discard and recreate
