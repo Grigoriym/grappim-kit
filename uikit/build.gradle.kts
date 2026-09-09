@@ -32,6 +32,8 @@ kotlin {
             api(libs.jetbrains.compose.components.resources)
             api(libs.jetbrains.compose.icons)
             api(libs.kotlinx.collections.immutable)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.jetbrains.lifecycle.runtime.compose)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
