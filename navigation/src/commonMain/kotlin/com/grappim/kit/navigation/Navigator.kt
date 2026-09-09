@@ -62,6 +62,12 @@ class Navigator(val state: NavigationState) {
      * Wipes every section's history and lands on [key] alone — for "forget everything, start
      * fresh" transitions (login success, logout) that [navigate] can't express, since it only ever
      * touches the currently active section's own sub-stack or switches which section is active.
+     *
+     * Also bumps [NavigationState.resetGeneration], which forces every section's `ViewModelStore`
+     * to be freed — not just the ones whose stack actually lost entries above. A payload-less
+     * `data object` top-level key survives the stack surgery above unchanged (same instance was
+     * already at index 0), so without this it would silently keep its old `ViewModelStore` across
+     * the reset. See [NavigationState.resetGeneration]'s doc for the full mechanism.
      */
     fun resetTo(key: NavKey) {
         state.subStacks.forEach { (keyClass, stack) ->
@@ -74,6 +80,7 @@ class Navigator(val state: NavigationState) {
             clear()
             add(key)
         }
+        state.resetGeneration++
     }
 
     private fun goToKey(key: NavKey) {

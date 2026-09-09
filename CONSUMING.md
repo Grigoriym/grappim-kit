@@ -81,36 +81,56 @@ divergence over wallosmobile/wayprint's narrower identical version — see
   automatically wayprint's answer, even though both apps' current behavior and the fix's
   effect are identical.
 
-- **Known, not yet fixed (found 2026-09-09, TaigaMobileNova): `resetTo()`/`goToTopLevel()`
-  never dispose a top-level screen's `ViewModelStore` when that screen's `NavKey` is a
-  payload-less singleton (`data object`) — which is the overwhelmingly common shape for a
-  top-level/tab-root key.** Both functions "reset" a section by writing the target key back
-  into a `NavBackStack` slot (`stack[0] = key`, or `topLevelStack[idx] = key`) rather than
-  removing the old entry and pushing a new one. Real Nav3's `ViewModelStoreNavEntryDecorator`
-  only disposes a `ViewModelStore` when its `NavEntryDecorator.onPop` fires, which only
-  happens when the entry's `contentKey` structurally *disappears* from the tracked backstack
-  list (`equals()`-based diffing, traced in `navigation3-runtime`/`lifecycle-viewmodel-navigation3`
-  sources — see `agentic-grappim`'s `mobile-patterns` skill, Navigation section, for the full
-  mechanism). Writing the same singleton object back is a no-op from that diff's perspective,
-  so the disposal never fires — any `@KoinViewModel`/`viewModel()` resolved at that top-level
-  entry survives `resetTo()`/`goToTopLevel()` indefinitely, including across an app's own
-  "logout" reset. Confirmed via TaigaMobileNova's own bug: `DashboardViewModel` kept showing
-  a previous account's data after logout→login (inside one continuous process — a fresh
-  process hides this, since it never had the stale instance to begin with) until a manual
-  pull-to-refresh re-ran its fetch on the same surviving instance.
+- **Fixed 2026-09-09 (found by TaigaMobileNova the same day): `resetTo()` never disposed a
+  top-level screen's `ViewModelStore` when that screen's `NavKey` is a payload-less
+  singleton (`data object`) — the overwhelmingly common shape for a top-level/tab-root
+  key.** `resetTo()` "resets" a section by writing the target key back into a
+  `NavBackStack` slot (`stack[0] = key`) rather than removing the old entry and pushing a
+  new one. Real Nav3's `ViewModelStoreNavEntryDecorator` only disposes a `ViewModelStore`
+  when its `NavEntryDecorator.onPop` fires, which only happens when the entry's
+  `contentKey` structurally *disappears* from the tracked backstack list (`equals()`-based
+  diffing, traced in `navigation3-runtime`/`lifecycle-viewmodel-navigation3` sources — see
+  `agentic-grappim`'s `mobile-patterns` skill, Navigation section, for the full mechanism).
+  Writing the same singleton object back is a no-op from that diff's perspective, so the
+  disposal never fired — any `@KoinViewModel`/`viewModel()` resolved at that top-level
+  entry survived `resetTo()` indefinitely, including across an app's own "logout" reset.
+  Confirmed via TaigaMobileNova's own bug: `DashboardViewModel` kept showing a previous
+  account's data after logout→login (inside one continuous process — a fresh process
+  hides this, since it never had the stale instance to begin with) until a manual
+  pull-to-refresh re-ran its fetch on the same surviving instance. TaigaMobileNova worked
+  around it at the app level (wrap the nav host's composition root in
+  `key(sessionGeneration)`, bumped on logout — see its `composeApp/.../main/MainScreen.kt`)
+  before this library-level fix existed; that workaround is still safe to keep (it just
+  becomes redundant, tearing down a slightly larger subtree than necessary) but can now be
+  narrowed to rely on this fix instead if the app wants to.
 
-  **Not fixed in this library yet.** TaigaMobileNova worked around it at the app level (wrap
-  the nav host's composition root in `key(sessionGeneration)`, bumped on logout, to force a
-  full Compose-level teardown instead of relying on this library's reset primitives to also
-  reset ViewModel state — see its `composeApp/.../main/MainScreen.kt`). Any other consumer
-  (wallosmobile, wayprint, HateItOrRateIt) that reaches a top-level screen via `resetTo()`/
-  `goToTopLevel()` and expects that screen's ViewModel to come back fresh after a session
-  reset has this same latent bug — check before assuming a "logout" flow actually clears
-  per-screen state. A real fix here (e.g. having `resetTo`/`goToTopLevel` force genuine
-  pop-then-push semantics, or exposing an explicit "dispose this section" primitive) needs
-  its own investigation into whether any consumer's current tests/behavior implicitly depend
-  on today's persistence — raise with gregory before touching it, same as the back-stack-growing
-  fix above.
+  **Correction to the original report:** `goToTopLevel()` (the private function `navigate()`
+  calls when switching tabs) does the same "write into a slot" thing but is *not* part of
+  this bug — a tab switch is supposed to preserve the section you're leaving, and
+  `goToTopLevel()` never truncates the target section's own sub-stack, so its
+  `ViewModelStore` surviving a tab switch is the documented, intended feature ("switching
+  sections keeps each one's history"), not a leak. Only `resetTo()`'s documented "forget
+  everything, start fresh" contract was actually broken.
+
+  **The fix** (`navigation` module, commit range starting `<pending>`): `NavigationState`
+  gained a `resetGeneration: Int` counter; `resetTo()` now increments it in addition to its
+  existing stack surgery; `toEntries()` wraps its whole per-section decoration step in
+  `key(resetGeneration) { ... }`. A `key()` value change makes Compose discard and recreate
+  that entire composition group from scratch — which reliably disposes every section's
+  `ViewModelStore` (and saveable state) via Compose's own composition lifecycle, sidestepping
+  the equals()-based diffing that can never observe a payload-less singleton key "change" at
+  all. `navigate()`/`goToTopLevel()`/`goBack()` never touch `resetGeneration`, so ordinary
+  tab switching and back navigation still preserve state exactly as before — confirmed via
+  regression tests (`NavigatorTest`: `resetTo bumps resetGeneration even when the target is
+  a payload-less singleton key`, `navigate and goBack never touch resetGeneration`).
+  **Not verified end-to-end on a real Compose UI** — this module's test suite is
+  state-only (no `commonTest`/`androidTest` Compose runtime dependency exists here yet), so
+  the `key()`-forces-disposal mechanism is verified by Compose's own documented semantics
+  (identical in kind to TaigaMobileNova's own already-production-verified
+  `key(sessionGeneration)` workaround, just scoped to the nav-entry subtree instead of the
+  whole screen) rather than by an automated test here. **Any consumer swapping onto the
+  version that ships this fix should smoke-test its own logout→login flow on device before
+  relying on it**, same as any other `grappim-kit` swap.
 
 ## uikit (`grappim-kit-uikit`)
 

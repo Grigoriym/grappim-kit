@@ -207,4 +207,30 @@ class NavigatorTest {
         navigator.navigate(SettingsRoute)
         assertEquals(listOf(SettingsRoute), navigator.state.currentSubStack.toList())
     }
+
+    @Test
+    fun `resetTo bumps resetGeneration even when the target is a payload-less singleton key`() {
+        val navigator = navigator()
+        val before = navigator.state.resetGeneration
+
+        // HomeRoute is already the sole entry in its own sub-stack and the current top-level key,
+        // so this resetTo() changes no NavKey's equals()/identity anywhere — resetGeneration is
+        // the only signal toEntries() gets that a ViewModelStore-freeing reset happened at all.
+        navigator.resetTo(HomeRoute)
+
+        assertEquals(before + 1, navigator.state.resetGeneration)
+    }
+
+    @Test
+    fun `navigate and goBack never touch resetGeneration`() {
+        val navigator = navigator()
+        val before = navigator.state.resetGeneration
+
+        navigator.navigate(DetailRoute(1))
+        navigator.navigate(SettingsRoute)
+        navigator.navigate(HomeRoute)
+        navigator.goBack()
+
+        assertEquals(before, navigator.state.resetGeneration)
+    }
 }
