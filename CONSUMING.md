@@ -81,6 +81,37 @@ divergence over wallosmobile/wayprint's narrower identical version — see
   automatically wayprint's answer, even though both apps' current behavior and the fix's
   effect are identical.
 
+- **Known, not yet fixed (found 2026-09-09, TaigaMobileNova): `resetTo()`/`goToTopLevel()`
+  never dispose a top-level screen's `ViewModelStore` when that screen's `NavKey` is a
+  payload-less singleton (`data object`) — which is the overwhelmingly common shape for a
+  top-level/tab-root key.** Both functions "reset" a section by writing the target key back
+  into a `NavBackStack` slot (`stack[0] = key`, or `topLevelStack[idx] = key`) rather than
+  removing the old entry and pushing a new one. Real Nav3's `ViewModelStoreNavEntryDecorator`
+  only disposes a `ViewModelStore` when its `NavEntryDecorator.onPop` fires, which only
+  happens when the entry's `contentKey` structurally *disappears* from the tracked backstack
+  list (`equals()`-based diffing, traced in `navigation3-runtime`/`lifecycle-viewmodel-navigation3`
+  sources — see `agentic-grappim`'s `mobile-patterns` skill, Navigation section, for the full
+  mechanism). Writing the same singleton object back is a no-op from that diff's perspective,
+  so the disposal never fires — any `@KoinViewModel`/`viewModel()` resolved at that top-level
+  entry survives `resetTo()`/`goToTopLevel()` indefinitely, including across an app's own
+  "logout" reset. Confirmed via TaigaMobileNova's own bug: `DashboardViewModel` kept showing
+  a previous account's data after logout→login (inside one continuous process — a fresh
+  process hides this, since it never had the stale instance to begin with) until a manual
+  pull-to-refresh re-ran its fetch on the same surviving instance.
+
+  **Not fixed in this library yet.** TaigaMobileNova worked around it at the app level (wrap
+  the nav host's composition root in `key(sessionGeneration)`, bumped on logout, to force a
+  full Compose-level teardown instead of relying on this library's reset primitives to also
+  reset ViewModel state — see its `composeApp/.../main/MainScreen.kt`). Any other consumer
+  (wallosmobile, wayprint, HateItOrRateIt) that reaches a top-level screen via `resetTo()`/
+  `goToTopLevel()` and expects that screen's ViewModel to come back fresh after a session
+  reset has this same latent bug — check before assuming a "logout" flow actually clears
+  per-screen state. A real fix here (e.g. having `resetTo`/`goToTopLevel` force genuine
+  pop-then-push semantics, or exposing an explicit "dispose this section" primitive) needs
+  its own investigation into whether any consumer's current tests/behavior implicitly depend
+  on today's persistence — raise with gregory before touching it, same as the back-stack-growing
+  fix above.
+
 ## uikit (`grappim-kit-uikit`)
 
 Reconciled from `wallosmobile`'s/`TaigaMobileNova`'s `uikit` theme scaffolding and top-bar
