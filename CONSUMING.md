@@ -96,12 +96,17 @@ original per-field reconciliation call, and "Step 8f" for what changed extractin
 - **`TopBar`'s Back/Menu content descriptions are caller-supplied
   (`backContentDescription`/`menuContentDescription` params), not resolved from a bundled
   string resource.** Every other content description in this module (`TopBarAction`,
-  `NavigationIconConfig.Custom`) already worked this way — only Back/Menu were special-cased
-  to reach into an app-bundled `stringResource(...)` before this port, which is exactly what
-  would have forced `grappim-kit` to set up its own Compose Multiplatform string-resource
-  generation. Making them caller-supplied too removes that requirement entirely and is more
-  consistent with the rest of the module, not a workaround. Typically only one call site (the
-  shell composable that renders `TopBar`) needs to supply these, not every screen.
+  `NavigationIconConfig.Custom`) already worked this way. **Correction (2026-09-09, confirmed
+  consuming TaigaMobileNova, PR #394):** TaigaMobileNova's own pre-port `TaigaTopAppBar` did
+  *not* resolve these from a bundled string resource either — it hardcoded plain `"Back"`/
+  `"Menu"` string literals (no `RString` entry existed for either). Whichever app's code this
+  paragraph originally described, it wasn't TaigaMobileNova's; the caller-supplied design is
+  still the right call (removes the string-resource-generation requirement from `grappim-kit`
+  entirely and is more consistent with the rest of the module), it just isn't a strict
+  behavior-preserving port for an app that never had localized Back/Menu strings to begin
+  with — that app's call site passes the same hardcoded literals through instead. Typically
+  only one call site (the shell composable that renders `TopBar`) needs to supply these, not
+  every screen.
 - **`KitPreviewTheme` only wires `LocalTopBarConfig`, not an offline/snackbar composition
   local.** wallosmobile's own `WallosMobilePreviewTheme` (the richer of the two source
   apps') also wires `LocalIsOffline`/`LocalSnackbarHostController` from its own
@@ -122,6 +127,45 @@ original per-field reconciliation call, and "Step 8f" for what changed extractin
   *app* generated; `NativeText` itself needs no resource generation. `getErrorMessage`
   (each app's own exception→message mapping) was **not** ported — that's app-specific
   business logic using each app's own exception types, not part of the shareable type.
+
+**Findings from consuming this module in TaigaMobileNova (2026-09-09, PR #394)** — none of these
+were called out above, so a consuming app should check for them rather than assume the swap is a
+behavior-preserving no-op:
+
+- **`KitTheme`/`KitPreviewTheme` wrap `content` in `Surface(Modifier.fillMaxSize())`
+  unconditionally — including in `KitTheme` itself, not only `KitPreviewTheme`.**
+  TaigaMobileNova's original `TaigaMobileTheme` (the real app-root theme) had no `Surface` at
+  all; only its `TaigaMobilePreviewTheme` wrapped content in one. This is a real, if likely
+  desirable, behavior addition at the app's root: it paints `colorScheme.surface` and provides
+  a default `LocalContentColor` for any screen composed with no `Scaffold` of its own (a login
+  screen is the concrete case — without this, that screen's background is whatever the OS
+  window provides, and Compose's default text color wins, which is black-on-black in dark
+  mode). GUI-verified correct for TaigaMobileNova's login screen in both light and dark mode,
+  but a consuming app should not assume this is a no-op purely because its main screens already
+  have their own `Scaffold` — check every screen that's composed before any `Scaffold` mounts
+  (loading/splash screens are the other common case).
+- **`TopBar` wraps its `CenterAlignedTopAppBar` in `AnimatedVisibility` (slide in/out)** where
+  TaigaMobileNova's original `TaigaTopAppBar` used a plain `if (isVisible) { ... }` with no
+  animation. Additive/cosmetic, not a correctness issue, but worth knowing before assuming a
+  swap changes nothing visually.
+- **`TopBarAction` gained a third variant, `TopBarActionVectorButton`** (`ImageVector`-based,
+  alongside the pre-existing `DrawableResource`-based `TopBarActionIconButton` and
+  `TopBarActionTextButton`) — additive, not consumed by TaigaMobileNova, but note it for any
+  `when` a consuming app writes over `TopBarAction` itself (none exists in `grappim-kit`'s own
+  `TopBar.kt` outside this module, since `TopBar` is the only place matching over it).
+- **`KitTheme` has no accommodation for a platform-varying `ColorScheme`** (e.g. Android's
+  Material You `dynamicLightColorScheme`/`dynamicDarkColorScheme`, resolved per-platform via
+  `expect`/`actual` in TaigaMobileNova's case) — it takes two fixed `ColorScheme` values plus a
+  `darkTheme` flag to pick between them. An app with per-platform theme resolution keeps that
+  logic entirely local (it has nothing to do with brand colors/typography, which is what
+  `KitTheme`'s parameters are for) and adapts it to `KitTheme`'s shape by computing the
+  platform-correct scheme once for the current mode, then passing it as *both* the
+  `lightColorScheme` and `darkColorScheme` arguments with `darkTheme = false` — this forces
+  `KitTheme`'s internal `if (darkTheme) darkColorScheme else lightColorScheme` to always
+  resolve to the already-correct value without evaluating the platform call twice. See
+  TaigaMobileNova's `uikit/.../theme/Theme.kt` (PR #394) for the worked example: it keeps its
+  own `expect fun colorScheme(darkTheme: Boolean)` (Android dynamic-color branch included) and
+  wraps it exactly this way in `TaigaMobileTheme`/`TaigaMobilePreviewTheme`.
 
 ## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
