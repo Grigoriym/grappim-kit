@@ -128,6 +128,34 @@ original per-field reconciliation call, and "Step 8f" for what changed extractin
   (each app's own exception→message mapping) was **not** ported — that's app-specific
   business logic using each app's own exception types, not part of the shareable type.
 
+**Findings from wallosmobile's swap (2026-09-09), not caught by the extraction verdict above:**
+
+- **`KitTheme` unconditionally wraps `LocalUriHandler` in a `SafeUriHandler`** (refuses any
+  non-http(s) scheme before delegating) with **no opt-out** — this wasn't called out in the
+  bullets above, and it is a real, app-visible behavior change for a consumer that never had
+  this guard. wallosmobile's own security register had explicitly recorded the *absence* of a
+  scheme allowlist as an accepted deviation (its two `openUri` call sites are fixed https
+  `RString` resources, no untrusted input) — swapping onto `KitTheme` closed that gap for free,
+  but only because it happened to be harmless there. **Check the consuming app's own
+  `LocalUriHandler.openUri()` call sites before swapping**: if any of them ever pass through
+  user- or server-supplied text and would need to keep allowing something `SafeUriHandler`
+  refuses, this is a hard blocker, not a config knob, since `KitTheme` has no way to skip it.
+- **`TopBarActionIconButton`/`TopBarActionVectorButton`/`TopBarActionTextButton` each gained an
+  `enabled: Boolean = true` parameter**, not present in either source app's original type. It's
+  additive and defaulted, so it doesn't break an existing call site — but it's undocumented
+  above and worth knowing about before assuming the action types are an exact structural match.
+- **`uikit`'s own `api` dependency is where `NativeText`/`getErrorMessage`/`ObserveAsEvents`
+  reach a consumer's other modules, and swapping it is a breaking change for anyone who relied
+  on the old transitive edge.** wallosmobile's `uikit` module used to declare
+  `api(projects.utils.ui)` (for `TopBarConfig`'s `NativeText`); every feature module that used
+  `utils:ui`'s `getErrorMessage`/`ObserveAsEvents` — but only ever declared `implementation(uikit)`,
+  never `utils:ui` directly — got them for free through that edge. Swapping `uikit`'s `api` target
+  to `grappim-kit-uikit` breaks every one of those call sites (`Unresolved reference 'utils'`)
+  until each such module adds its own direct `implementation(projects.utils.ui)` line. Worth
+  checking for the same shape in any other app before swapping: grep the consumer for symbols
+  from whatever app-local module fed `uikit`'s old `api` edge, not just for the types
+  `grappim-kit-uikit` itself now provides.
+
 **Findings from consuming this module in TaigaMobileNova (2026-09-09, PR #394)** — none of these
 were called out above, so a consuming app should check for them rather than assume the swap is a
 behavior-preserving no-op:
