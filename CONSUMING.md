@@ -290,10 +290,38 @@ this section covers the extraction shape, not swap findings.
 - **wayprint has no equivalent at all** (FOSS-only distribution, no update-check need) —
   nothing to reconcile there either.
 
-## logger, coroutines, domain, crash, appinfo, storage, trustmanager, testing
+## logger (`grappim-kit-logger`)
+
+Swapped onto by wallosmobile 2026-09-09 (PR #71) — first consumer. Re-diffed 0.1.3's published
+source against wallosmobile's `dev` HEAD before swapping, per the standing rule above:
+`Logcat.kt`, `LogPriority.kt`, `KitLogger.kt` (wallosmobile's `WallosLogger.kt`) and the
+android-artifact's `TimberLogger.kt` were all byte-identical apart from the expected package
+rename (`com.grappim.kit.logger` vs. `com.grappim.wallosmobile.core.logger`) and class rename
+(`KitLogger` vs. `WallosLogger`) — no drift found, unlike `navigation`'s `0.1.0`.
+
+- **A mechanical swap, same as `navigation` for TaigaMobileNova** — no behavior change, no
+  product decision to confirm with the app owner. wallosmobile's `core:logger` was the module
+  `grappim-kit-logger` was extracted from in the first place (see this repo's own `CLAUDE.md`),
+  so there was nothing to reconcile.
+- **Check how the consuming app wires the old local module in before assuming it's a per-module
+  dependency line like `navigation`/`uikit`.** wallosmobile's own `build-logic` hardcoded
+  `implementation(project(":core:logger"))` into every KMP library module via its
+  `configureKmp()` convention function (one central call, not a per-module `build.gradle.kts`
+  line) — the swap there is a single edit in that one file
+  (`implementation(libs.grappim.kit.logger)`), not 28 separate `build.gradle.kts` additions the
+  way `uikit`'s per-module `api`/`implementation` lines were. Only a plain Android application
+  module that never goes through `configureKmp()` (wallosmobile's `androidApp`) needs its own
+  explicit dependency line.
+- **A class that only *implements* the module's interface as a test fake still needs the same
+  import/class rename as an ordinary consumer.** wallosmobile's `WallosEnvelopeParserTest.kt`
+  declares a `commonTest`-local `RecordingLogger : WallosLogger` fake — not part of the
+  extraction itself, but it broke the same way any other `WallosLogger` reference did and needed
+  the same `KitLogger` rename.
+
+## coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
-Add a section here the first time one does, same shape as `navigation`/`uikit` above.
+Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger` above.
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
