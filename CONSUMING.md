@@ -318,6 +318,36 @@ rename (`com.grappim.kit.logger` vs. `com.grappim.wallosmobile.core.logger`) and
   extraction itself, but it broke the same way any other `WallosLogger` reference did and needed
   the same `KitLogger` rename.
 
+**Swapped onto by TaigaMobileNova 2026-09-09 (PR #413) — second consumer.** Verified more strictly
+than the wallosmobile pass: instead of diffing against a local `grappim-kit` checkout, downloaded
+the actual published `grappim-kit-logger-{,android,jvm}-0.1.3-sources.jar` files from Maven Central
+(the module publishes three separate artifacts — root/common, `-android`, `-jvm` — each with its
+own sources jar; the root one's jar carries `commonMain` + `iosMain`, not just `commonMain`) and
+diffed those directly. Byte-identical, same as wallosmobile's finding — confirms the extraction
+itself, not just wallosmobile's checkout state at extraction time, is what's clean.
+
+- **The `build-logic` centralization gotcha wallosmobile found is not wallosmobile-specific.**
+  TaigaMobileNova's own `KmpConfiguration.kt` had the identical shape (`implementation(project(
+  ":core:logger"))` hardcoded once inside `configureKmp()`, guarded by
+  `if (project.path != ":core:logger")` since the module can't depend on itself) — same
+  single-line swap to `libs.grappim.kit.logger`, no per-module edits needed. Worth checking for
+  on every future `core/*` swap across any of the four apps, not just re-confirming per-app.
+- **TaigaMobileNova ships all three backends (`TimberLogger`/`NSLogLogger`/`FileLogger`), unlike
+  wallosmobile's Android-only usage** — this is the first swap to touch the iOS and desktop/JVM
+  install call sites (`main.ios.kt`'s `NSLogLogger.install()`, `TaigaMobileDesktop.kt`'s
+  `FileLogger.install(...)`), not just `TimberLogger.install()`. All three renamed cleanly; no
+  platform-specific gotcha turned up.
+- **A mechanical import/class rename script misses prose comments that name the old
+  module/class without an import statement.** Two files —
+  `composeApp/src/iosMain/.../CrashReporterImpl.ios.kt` and
+  `composeApp/src/jvmMain/.../CrashReporterImpl.jvm.kt` — had a code comment reading "logs via
+  core/logger's NSLogLogger/FileLogger instead of this interface" with no `import` line on the
+  same file to catch a package-rename `sed` pass. Caught by a manual repo-wide grep for
+  `core.logger`/`core:logger`/`TaigaLogger` after the mechanical rename, not by the rename itself.
+  Same category of miss as `uikit`'s implicit-same-package-resolution gotcha above, different
+  mechanism (a comment, not a resolvable reference) — grep broadly for the old name in prose too,
+  not just in code that would fail to compile.
+
 ## coroutines, domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
