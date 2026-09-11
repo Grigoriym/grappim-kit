@@ -348,10 +348,66 @@ itself, not just wallosmobile's checkout state at extraction time, is what's cle
   mechanism (a comment, not a resolvable reference) — grep broadly for the old name in prose too,
   not just in code that would fail to compile.
 
-## coroutines, domain, crash, appinfo, storage, trustmanager, testing
+## coroutines (`grappim-kit-coroutines`)
+
+Swapped onto by wallosmobile 2026-09-11 — first consumer. Re-diffed 0.1.4's published
+`sources.jar` (downloaded from Maven Central, not a local `grappim-kit` checkout) against
+wallosmobile's `core/async-kmp` on `dev` HEAD before swapping, per the standing rule above:
+`KitDispatchers.kt`/`ApplicationScope.kt` matched wallosmobile's own consuming session's
+briefing exactly — `KitDispatchers.default/io/main/mainImmediate` map straight to
+`Dispatchers.Default/IO/Main/Main.immediate`, `applicationScope(dispatcher =
+KitDispatchers.default)` returns `CoroutineScope(SupervisorJob() + dispatcher +
+exceptionHandler)`. No drift found.
+
+- **This module is DI-framework-agnostic by design (no Koin annotations), unlike every
+  other `grappim-kit` module swapped onto so far** — the consuming app keeps its own thin
+  Koin wrapper. wallosmobile's `core/async-kmp` kept its five local `@Qualifier`
+  annotations (`DefaultDispatcher`/`IoDispatcher`/`ApplicationScope`/`MainDispatcher`/
+  `MainImmediateDispatcher`) and `@Single`-annotated provider functions exactly as they
+  were, just re-sourcing each one from the plain library instead of raw
+  `kotlinx.coroutines`: `Dispatchers.Default` → `KitDispatchers.default`,
+  `CoroutineScope(SupervisorJob() + defaultDispatcher)` → `applicationScope(defaultDispatcher)`,
+  etc. No consumer of the qualifier annotations elsewhere in the app needed any change —
+  they're still wallosmobile's own types, just backed by a different implementation.
+- **Real behavior change, not just a mechanical swap: `applicationScope()` installs a
+  `CoroutineExceptionHandler` that wallosmobile's own hand-rolled version never had.**
+  wallosmobile's pre-swap `provideApplicationScope()` was a bare
+  `CoroutineScope(SupervisorJob() + defaultDispatcher)` — an exception escaping a coroutine
+  launched on it had no handler and crashed the app via the dispatcher thread's default
+  uncaught-exception behavior. `grappim-kit`'s `applicationScope()` wraps a
+  `CoroutineExceptionHandler` that logs the throwable via `logcat(LogPriority.ERROR,
+  throwable = throwable)`. In wallosmobile's own error-handling convention (see its
+  `CLAUDE.md`), an `ERROR`-level log with a non-null `throwable` is exactly what its
+  `CrashlyticsTree` forwards to Crashlytics — so on the `gplay` flavor this swap turns what
+  used to be an app crash into a caught, reported-but-non-fatal error instead. Worth
+  flagging explicitly to any consumer that relied on (or tested for) the old crash-on-escape
+  behavior; nothing in wallosmobile did, so this was accepted as a strict improvement, not
+  reconciled against a product decision.
+- **`core:async-kmp` was already a per-module explicit dependency in wallosmobile
+  (`projects.core.asyncKmp` in each consuming module's own `build.gradle.kts`), not
+  centrally injected via `build-logic` the way `core:logger` was** — so unlike the logger
+  swap, this one needed no `build-logic` edit at all. The swap is contained entirely inside
+  `core/async-kmp` itself: one new `implementation(libs.grappim.kit.coroutines)` line in its
+  `build.gradle.kts`, plus the provider-function bodies above. Every other module still only
+  ever sees wallosmobile's own qualifier annotations and `CoroutineDispatcher`/`CoroutineScope`
+  types, never anything from `com.grappim.kit.coroutines` directly.
+- **`ThreadSafeMap<K, V>` (mutex-guarded map, also in this module) has no equivalent
+  anywhere in wallosmobile and was not consumed by this swap** — grepped for
+  `ThreadSafeMap`/`SynchronizedObject`/`synchronized(` repo-wide, zero hits before or after.
+  Noted for whichever future need reaches for it, not proven safe or unsafe by this swap.
+- **Verified**: `compileGplayDebugKotlin --rerun-tasks` (forces the Koin compiler plugin to
+  re-scan `@ComponentScan` after the DI-relevant change) green, both `assembleGplayDebug
+  -PgplayBuild`/`assembleFdroidDebug`, `allTests`, `detekt ktlintCheck`, both flavors'
+  Android lint all green. **Device-verified**: cold start on
+  `Medium_Phone_API_36.1` (gplay debug, `-PgplayBuild` + real `google-services.json` — the
+  project's own documented gotcha for a working gplay cold start) resolves the whole Koin
+  graph and renders the dashboard from the already-logged-in session's cache with no crash.
+
+## domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
-Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger` above.
+Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger`/
+`coroutines` above.
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
