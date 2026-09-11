@@ -889,6 +889,90 @@ pre-swap `core/api/.../CompositeTrustManager.kt` on `dev` HEAD.
   confirmed the new cipher's encrypt/decrypt round-trips correctly end to end and the
   dashboard rendered real data with no FATAL/Koin-resolution logcat lines throughout.
 
+### TaigaMobileNova
+
+Swapped 2026-09-11, requested by peer session `grappim-watcher-29`; gregory approved
+directly in-session. Diffed the published `0.1.4` sources for both artifacts against the
+local `grappim-kit` checkout's HEAD first — `NetworkMonitor`/`NetworkMonitorImpl` (all
+three platforms), `TrustedCertStorage`, and `CompositeTrustManager` (jvm+android) all
+byte-identical to the checkout; `grappim-kit-trustmanager`'s own published *sources* jar
+is empty (only `META-INF/MANIFEST.MF`, no `.kt` at all) and `grappim-kit-storage`'s is
+missing its androidMain/jvmMain sources (only commonMain + iosMain present) — the
+**compiled** jars are fine (`grappim-kit-storage-jvm-0.1.4.jar`/
+`grappim-kit-trustmanager-jvm-0.1.4.jar` both contain the expected classes), so this
+didn't block the swap, but it's a real gap in `grappim-kit`'s publish config (the
+sourcesJar task appears to only pick up `commonMain` for these two modules) worth fixing
+upstream — anyone relying on "download sources jar, diff it" for `storage`/`trustmanager`
+without a local checkout handy would see an empty/partial diff and could wrongly read
+that as "nothing to check."
+
+- **This app's own pre-swap classes were essentially already what got extracted** —
+  `NetworkMonitor`(+impls)/`TrustedCertStorage` were mechanical (import-only) swaps, same
+  as wallosmobile found. `CompositeTrustManager` diffed byte-identical in logic to this
+  app's own `core/api/.../CompositeTrustManager.kt` (jvm+android) — unlike wallosmobile,
+  this app's local class *already* had the hostname-mismatch branch wired to
+  `CertificateHostnameMismatchException` (landed in the `domain` swap, PR #423, before
+  `trustmanager` existed as a separate kit module) so there was no new wiring to pick up
+  here, just a straight deletion + import swap in `PlatformHttpClientEngine.kt`.
+- **The `KeystoreSecretCipher` `"v1:"`-prefix migration risk wallosmobile found does not
+  apply to this app, but only because its own pre-swap cipher happened to already match
+  the kit's wire format exactly** — not because the kit's passthrough behavior is safe in
+  general. This app's deleted `AndroidKeystoreTokenCipher` already used
+  `CIPHERTEXT_PREFIX = "v1:"`, the same 12-byte IV / 128-bit GCM tag layout, and
+  `AES/GCM/NoPadding`, so existing ciphertext already carries a recognized prefix rather
+  than falling into the kit's "no prefix = plaintext" passthrough. Verified with a
+  throwaway JVM test (not committed — `AndroidKeyStore` isn't available on the JVM, so
+  this only proves the encoding/cipher-parameter compatibility, not a real Keystore round
+  trip): encrypted a value with the old format's exact byte layout, decrypted it through
+  the new cipher's decode path, got the original plaintext back. Also kept the exact same
+  Keystore alias (`"taiga_auth_token_key"`) in the new provider so the underlying Keystore
+  key itself is reused, not regenerated. **A consumer whose pre-swap cipher used a
+  different prefix (or none) is still exposed to wallosmobile's finding** — this is
+  app-specific luck, not a kit-level fix, and grappim-kit's `decrypt()` still needs the
+  "fail loudly on unrecognized prefix" fix wallosmobile's finding called for.
+- **`core/storage` and `core/api` both survive, narrowed** — `core/storage` still hosts
+  Room DAOs/entities, `FiltersStorage`, `TaigaSessionStorage`, and `AuthStorage` (now
+  built on the kit's `SecretCipher`); `core/api` still hosts `KmpNetworkModule`/
+  `PlatformHttpClientEngine` (now importing the kit's `CompositeTrustManager`) and its
+  Ktor plugins. Neither module was a candidate for deletion the way `core/logger`/
+  `core/crash-api` were.
+- **`core/api/build.gradle.kts` had no per-platform `sourceSets` dependency blocks before
+  this swap** (`commonMain.dependencies` only) — added `androidMain.dependencies`/
+  `jvmMain.dependencies` blocks just to carry `implementation(libs.grappim.kit.trustmanager)`,
+  since `trustmanager` has no commonMain/iOS target at all.
+- **Local `CompositeTrustManagerTest.kt` (plus its `FakeX509Certificate`/
+  `FakeX509TrustManager` fakes) was deleted outright rather than reworked onto the
+  `sslEngine(host)` helper wallosmobile ported to** — this app already had
+  `RealTlsHandshakeJvmTest` (added in the `domain` swap, PR #423: a real self-signed HTTPS
+  server driven through the actual `createPlatformHttpClientEngine`/`CompositeTrustManager`
+  wiring over a genuine JDK handshake), which exercises the same logic end-to-end and
+  needed no changes beyond a KDoc reference fix (it named the now-deleted local
+  `CompositeTrustManagerTest`). Confirms the `internal`-overload trap wallosmobile
+  documented above: the old test called `checkServerTrusted(chain, authType, host:
+  String?)` directly and would not have compiled unchanged.
+- **`NetworkMonitorImpl` needed an explicit provider on all three platforms** (android/jvm/
+  ios), same `@ComponentScan`-stops-working gap `storage` documents above. The jvm one is
+  the interesting case: this app already has its own Koin-qualified
+  `@IoDispatcher`/`@ApplicationScope` providers (from the earlier `coroutines` swap,
+  PR #421) that ultimately source from the kit's `KitDispatchers.io`/`applicationScope()`
+  — but `applicationScope()` is a plain factory that builds a **new** `CoroutineScope` on
+  every call, not a singleton. The jvm provider explicitly injects this app's existing
+  Koin-singleton `@ApplicationScope`/`@IoDispatcher` instances into
+  `NetworkMonitorImpl(ioDispatcher, applicationScope)` rather than relying on the kit
+  class's own bare defaults (`= applicationScope()`), which would have silently created a
+  second, independent application-lifetime scope alongside the app's canonical one.
+- **Verified**: full `./gradlew jvmTest` (all modules) green, `ktlintCheck` clean (needed
+  one `ktlintFormat` pass across `composeApp`/`core:api`/`feature:login:ui` for import
+  ordering the sed-based package-path rename introduced), `koverXmlReport`/`:koverVerify`
+  (floor holds), `check-guardrails.sh origin/dev..HEAD` clean,
+  `:androidApp:assembleFdroidDebug`, `:composeApp:compileKotlinIosSimulatorArm64
+  --rerun-tasks` all green. **Desktop-verified** via `:composeApp:run` — the app's own
+  file log (`~/.local/share/TaigaMobile/taigamobile.log`) shows a clean boot to
+  `LoginNavDestination` with no DI-resolution failure, confirming the new
+  `NetworkMonitor`/`AuthStorage`(`NoopSecretCipher`)/`TrustedCertStorage` providers all
+  resolve at runtime on the jvm target. PR open, not merged — same gate-before-merge
+  convention as every prior TaigaMobileNova swap.
+
 ## testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto this from an app. The
