@@ -403,6 +403,47 @@ exceptionHandler)`. No drift found.
   project's own documented gotcha for a working gplay cold start) resolves the whole Koin
   graph and renders the dashboard from the already-logged-in session's cache with no crash.
 
+**Swapped onto by TaigaMobileNova 2026-09-11 (PR #421) — third consumer, second app.** This app
+is the module's actual extraction source (see this repo's own `CLAUDE.md`), so the diff was a
+formality — downloaded the published `grappim-kit-coroutines-0.1.4-sources.jar` from Maven
+Central and diffed all three files against the local `grappim-kit` checkout's HEAD directly
+(not against the app's pre-swap `core/async-kmp`, which is definitionally the same code with a
+package rename): byte-identical, confirming the artifact matches what actually shipped.
+
+- **Unlike wallosmobile, this app's `core/async-kmp` had a real consumer of `ThreadSafeMap`**
+  (`WorkItemEditStateRepository`, keying `WorkItemEditStateRepository`'s per-item edit sessions —
+  see this app's `CLAUDE.md`). wallosmobile's `implementation(libs.grappim.kit.coroutines)` isn't
+  enough once a consumer needs a type from the library directly through the local module: had to
+  use `api(...)` instead so `ThreadSafeMap` stays resolvable one hop away, same as any other
+  transitively-exposed type. A plain import-path rename
+  (`com.grappim.taigamobile.core.asynckmp.ThreadSafeMap` →
+  `com.grappim.kit.coroutines.ThreadSafeMap`) was the only change needed at the call site — the
+  type itself was byte-identical apart from the package.
+- **`core:async-kmp` was also already a per-module explicit dependency here** (same shape as
+  wallosmobile, ~30 `implementation(projects.core.asyncKmp)` lines across feature modules), not
+  centralized in `build-logic` — confirms this is a per-app fact to check, not something you can
+  infer from one prior swap (this repo's `core:logger` swap *was* centralized in both apps'
+  `build-logic`, which made both true statements look like they might generalize; `core:async-kmp`
+  breaks that pattern in both apps identically, for the same reason: it was already per-module
+  before either app touched grappim-kit).
+- **The local `KmpCoroutinesModule`'s own `commonTest` needed rewriting, not just deleting.**
+  Its one test asserted the `CoroutineExceptionHandler`-logs-not-crashes behavior end-to-end —
+  now redundant, since `grappim-kit-coroutines`'s own `ApplicationScopeTest` proves that at the
+  library level. Replaced it with a thin delegation test (`provideApplicationScope` passes the
+  given dispatcher through to `applicationScope()`, asserted via
+  `scope.coroutineContext[ContinuationInterceptor]`) rather than dropping coverage of the wiring
+  itself — same "commonTest proves delegation happens" convention this app already uses for
+  `expect`/`actual` platform code (see its `CLAUDE.md`, Testing section).
+- **Verified**: full `./gradlew jvmTest` (all modules, not just `core:async-kmp`) green,
+  `koverXmlReport`/`:koverVerify` (coverage floor holds), `ktlintCheck` green,
+  `:composeApp:compileKotlinJvm --rerun-tasks` (forces the Koin compiler plugin to re-scan) +
+  `KoinGraphTest` (147 definitions checked, no new failures — the 15 listed are this app's
+  pre-existing, documented `@InjectedParam` NavDestination exclusions, unrelated to this swap).
+  **Device-verified**: `:composeApp:run` (desktop) boots through the full Koin graph to a real
+  screen (`LoginNavDestination`, confirmed via the app's own file log) with no DI wiring crash —
+  this app treats JVM/desktop as a fully-supported platform for `expect`/`actual` verification
+  (see its `CLAUDE.md`), not a stand-in for Android/iOS.
+
 ## domain, crash, appinfo, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
