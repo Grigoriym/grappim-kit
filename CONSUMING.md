@@ -729,11 +729,174 @@ subtypes — so this was a real behavior change here, not a signature widening:
   exact mechanism the swap changed (what `checkServerTrusted` throws and how the mapper reads it
   back), which a manual dialog click-through would not add further confidence on top of.
 
-## storage, trustmanager, testing
+## storage (`grappim-kit-storage`)
 
-No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
-Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger`/
-`coroutines`/`crash`/`appinfo`/`domain` above.
+Swapped onto by wallosmobile 2026-09-11 — first consumer, alongside `trustmanager` below
+(one PR, not two — see that section for why). Diffed the published `0.1.4`
+`grappim-kit-storage`/`grappim-kit-storage-android` sources jars (downloaded from Maven
+Central) against the local `grappim-kit` checkout's HEAD first, per the standing rule:
+`NetworkMonitor.kt`, `NetworkMonitorImpl.kt` (androidMain), `SecretCipher.kt`,
+`KeystoreSecretCipher.kt` (androidMain) and `cert/TrustedCertStorage.kt` all
+byte-identical — no drift between the checkout and what's actually published. Then
+diffed those against wallosmobile's own pre-swap `core/storage` on `dev` HEAD.
+
+- **`NetworkMonitor`/`NetworkMonitorImpl` byte-identical apart from package and KDoc
+  wording** (the kit's drops a wallosmobile-specific "is the Wallos instance reachable"
+  phrasing for a generic "a specific server" one) — a mechanical swap for this type.
+- **`TrustedCertStorage` interface byte-identical.** `TrustedCertStorageImpl` is not:
+  the kit takes `Json` as a constructor param defaulted to
+  `Json { ignoreUnknownKeys = true }` (`class TrustedCertStorageImpl(dataStore, json =
+  ...)`, public, no DI annotation) where wallosmobile's original held it as a
+  `private val json` inside a `private companion object` on an `internal
+  @Single(binds = [TrustedCertStorage::class]) class`. Functionally identical encode/
+  decode logic either way — purely a constructor-shape and visibility change, not a
+  behavior one.
+- **Neither `SecretCipher` implementation nor `TrustedCertStorage`'s carries a Koin
+  annotation** (same convention as `crash`/`appinfo`'s "consuming app binds its own
+  instance" — noted in the `appupdate` section above, now confirmed for `storage` too):
+  a consuming app that had these `@Single`-annotated directly on the impl class (as
+  wallosmobile's own `KeystoreSecretCipher`/`TrustedCertStorageImpl` were) needs to grow
+  explicit `@Single fun provideX(...): X = XImpl(...)` provider functions in its own DI
+  module instead — `@ComponentScan` no longer picks these up once they're not in the
+  consuming app's own package tree.
+- **`KeystoreSecretCipher` gained two real deltas, not just a signature widening:**
+  - **`keyAlias: String` is now a required constructor param**, not a hardcoded
+    `private const val KEY_ALIAS` in a companion object — two consuming apps sharing a
+    device must not collide on the same Keystore entry. A consumer's own provider
+    function supplies its own alias string explicitly (wallosmobile kept its existing
+    `"wallos_api_key"` literal, just moved from the deleted class into the provider).
+  - **Stored format gains a `"v1:"` ciphertext prefix** (`CIPHERTEXT_PREFIX`), and
+    `decrypt()` now checks for it: a value with no prefix is treated as legacy plaintext
+    written before any cipher existed and passed through **unchanged** rather than
+    attempted-and-failed-to-decrypt. wallosmobile's original had neither the prefix nor
+    this passthrough branch — its stored form was bare `base64(iv || ciphertext)`. This
+    is a **real, observed behavior change** for any consumer upgrading over an existing
+    install with a previously-encrypted value already on disk: the pre-swap ciphertext
+    (no `"v1:"` prefix) now reads as "already plaintext" and is returned as-is — the raw
+    ciphertext bytes, not the real decrypted secret — rather than failing to decrypt
+    (which would have at least surfaced as "no key stored"). Confirmed on-device:
+    upgrading wallosmobile's installed APK in place over a previously-logged-in session
+    left the dashboard rendering cached data but the budget cards reading "The instance
+    didn't accept this API key" — the corrupted pass-through value sent to the server as
+    the API key. Harmless for an app with no live installs yet (wallosmobile's own
+    pre-v1 rule: stored state is expected to be discarded on a change like this, and a
+    fresh login round-trips correctly under the new format — verified separately, see
+    wallosmobile's own commit). **A consumer with real installs already using
+    `SecretCipher` needs to treat this as a breaking storage-format change**, not assume
+    the kit's passthrough branch makes it backward compatible — it only prevents a
+    *crash*, not silent corruption of a pre-existing encrypted value that happens to have
+    no `"v1:"` prefix.
+- **`NoopSecretCipher` (in `SecretCipher.kt`) is new — no wallosmobile equivalent, and
+  not consumed by this swap.** Android is wallosmobile's only target, so there is no
+  second platform needing a passthrough double. Noted for whichever future consumer
+  targets a platform with no Keystore-equivalent.
+- **`core:storage`'s own dependency on `core:domain` became fully dead, not just
+  redundant, once `TrustedCertStorage.kt` (its only user of `PendingCertTrust`) moved
+  out** — removed `implementation(projects.core.domain)` outright rather than leaving an
+  unused edge. Replaced with `api(libs.grappim.kit.storage)` (this module's own
+  `api(project(":domain"))` already re-exports `grappim-kit-domain`, so `PendingCertTrust`
+  keeps reaching every consumer that reached it through `core:storage` before). Worth
+  checking on any future swap into a module that had its own `core:domain` edge purely to
+  support the type being swapped out — it may now be dead too, not just superseded.
+- **`api`, not `implementation`, is what makes this swap a pure import rename for every
+  downstream consumer.** wallosmobile's `core:storage` had five direct consumers
+  (`core:api`, `composeApp`, `feature:settings:ui`, `feature:setup:data`, `:testing`),
+  each reaching `NetworkMonitor`/`SecretCipher`/`TrustedCertStorage` through a plain
+  `implementation(projects.core.storage)` edge — same shape the `domain`/`coroutines`
+  swaps already established needs `api` on the swapped-in kit dependency to keep flowing
+  through.
+- **Verified**: see `trustmanager` section below (one combined swap, one verification
+  pass).
+
+## trustmanager (`grappim-kit-trustmanager`)
+
+Swapped onto by wallosmobile 2026-09-11 — first consumer, alongside `storage` above, in
+one PR: `CompositeTrustManager`'s constructor takes the kit's own
+`com.grappim.kit.storage.cert.TrustedCertStorage`, not a generic interface, so swapping
+`trustmanager` alone while keeping a local `TrustedCertStorage` doesn't type-check.
+Diffed the published `0.1.4` `grappim-kit-trustmanager-android` sources jar against the
+local checkout's HEAD first (byte-identical), then against wallosmobile's own
+pre-swap `core/api/.../CompositeTrustManager.kt` on `dev` HEAD.
+
+- **Real behavior change, not purely mechanical: the hostname-mismatch branch is now
+  wired to `CertificateHostnameMismatchException`.** wallosmobile's original
+  `checkServerTrusted` lumped "no host" and "host doesn't match the certificate" into one
+  `if (host == null || !hostMatchesCertificate(host, leaf)) throw e` (rethrows the bare
+  platform exception unchanged for both). The kit's version keeps the `host == null`
+  case as a bare rethrow but wraps the hostname-mismatch case in
+  `CertificateHostnameMismatchException` the same way the untrusted-cert branch already
+  wrapped in `UntrustedCertificateException` — the domain swap's own note above ("left
+  unwired... a future trustmanager swap is where it either gets wired into that branch
+  or stays unused") is resolved by this swap: it's now wired. **Not user-visible for
+  wallosmobile**: `findPendingCertTrust()` only matches `UntrustedCertificateException`,
+  so a hostname mismatch still falls through to the same generic
+  `error_unreachable`-shaped message either way — this only enriches the cause chain
+  reaching Crashlytics/logcat for anyone who logs the full exception. Worth checking
+  whether a consuming app's own error-mapping code matches this new type explicitly
+  before assuming the swap is silent for it too — a consumer that special-cased "host
+  doesn't match" differently from "no host" pre-swap would see cause-chain shape change
+  at that branch.
+- **The `checkServerTrusted(chain, authType, host: String?)` `internal` overload
+  (the one that makes host-parametrized testing possible without a real TLS handshake)
+  is invisible across the module boundary, unlike when the class was local.** Kotlin
+  `internal` is compilation-unit-scoped: this module's own `jvmTest` can call it (it's a
+  friend compilation of the same module), but a consuming app's test source set —
+  compiled as part of a completely separate Gradle module — cannot, even though the
+  modifier reads identically to how it did when the class lived in the app's own source
+  tree. **Any consuming app with its own test suite driving this overload directly (as
+  wallosmobile's did) needs to rework those tests to go through one of the three public
+  overloads instead** (`checkServerTrusted(chain, authType)`,
+  `checkServerTrusted(chain, authType, socket: Socket)`,
+  `checkServerTrusted(chain, authType, engine: SSLEngine)`). wallosmobile added a small
+  `sslEngine(host: String): SSLEngine` test helper —
+  `SSLContext.getInstance("TLS").apply { init(null, null, null) }.createSSLEngine(host,
+  443)` — that gets a real, concrete, JDK-provided engine whose constructor-supplied
+  `peerHost` needs no faking, rather than hand-implementing the platform's own large
+  abstract `SSLEngine`/`SSLSocket` classes just to carry one string through the `Socket`
+  overload instead. All of wallosmobile's existing `CompositeTrustManagerTest` cases
+  ported cleanly onto this helper with no coverage lost, plus two assertions strengthened
+  to check `failure.cause is CertificateHostnameMismatchException` for the newly-wired
+  branch above.
+- **`sha256Fingerprint` and `CompositeTrustManager` itself are both public** (no
+  `internal` at the class/top-level-function level) where wallosmobile's originals were
+  `internal`/package-private-by-convention — expected, since they need to be constructible
+  and callable from outside the module now. Only the one test-only overload noted above
+  stayed `internal` and is the one that actually breaks a cross-module consumer.
+- **`commonMain.dependencies { implementation(project(":storage")) }` in this module's own
+  `build.gradle.kts`, not `api`** — a consuming app that needs to construct
+  `CompositeTrustManager` itself (as opposed to only depending on `trustmanager` for
+  something else) needs its own direct dependency on `grappim-kit-storage` too, for
+  `TrustedCertStorage` to be nameable at the construction call site.
+  `implementation(libs.grappim.kit.trustmanager)` alone is not enough. wallosmobile
+  already had this transitively via `core:storage`'s own `api(libs.grappim.kit.storage)`
+  (see `storage` section above), so this didn't need a new direct edge there — but a
+  consumer without that existing chain would.
+- **Android + JVM only, deliberately no iOS target** (`X509ExtendedTrustManager`/
+  `javax.net.ssl` don't exist there) — wallosmobile is Android-only anyway, so this
+  wasn't a constraint here, but worth flagging for the next consumer.
+- **Verified** (both `storage` and `trustmanager` together, one swap): `compileGplayDebugKotlin
+  --rerun-tasks` (forces the Koin compiler plugin to re-scan after the new provider
+  functions) green, `assembleFdroidDebug`/`assembleGplayDebug -PgplayBuild`, `allTests`
+  (including the reworked `CompositeTrustManagerTest`), `detekt ktlintCheck`,
+  `lintFdroidDebug`/`lintGplayDebug -PgplayBuild`, `check-guardrails.sh` all green.
+  **Device-verified**: cold start on `Medium_Phone_API_36.1` (gplay debug,
+  `-PgplayBuild`) over the *pre-swap* install resolved the full Koin graph with no crash
+  (confirming the three new `@Single` providers and `CompositeTrustManager`'s
+  construction site both still resolve at runtime) but surfaced the `KeystoreSecretCipher`
+  format-change consequence described above on the stale stored key. Clearing app data
+  and logging in fresh via the web-login bridge (`login.php` → `profile.php`, itself
+  routed through the same `CompositeTrustManager`-wrapped engine as every other request)
+  confirmed the new cipher's encrypt/decrypt round-trips correctly end to end and the
+  dashboard rendered real data with no FATAL/Koin-resolution logcat lines throughout.
+
+## testing
+
+No consumer-facing gotchas found yet — nothing has swapped onto this from an app. The
+`storage`/`trustmanager` swap above deliberately left `:testing` untouched (its own
+`FakeTrustedCertStorage`/`FakeNetworkMonitor` are out of scope per the crash swap's own
+precedent for excluding `testing`) — wallosmobile kept its local, hand-written fakes,
+updating only their imports to the new kit types. Add a section here the first time
+`grappim-kit-testing` itself gets swapped onto.
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
