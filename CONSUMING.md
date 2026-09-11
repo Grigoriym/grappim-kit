@@ -444,11 +444,85 @@ package rename): byte-identical, confirming the artifact matches what actually s
   this app treats JVM/desktop as a fully-supported platform for `expect`/`actual` verification
   (see its `CLAUDE.md`), not a stand-in for Android/iOS.
 
-## domain, crash, appinfo, storage, trustmanager, testing
+## crash (`grappim-kit-crash`)
+
+Swapped onto by wallosmobile 2026-09-11 — first consumer. Diffed the local `grappim-kit`
+checkout's `crash/src/commonMain/.../CrashReporter.kt` against wallosmobile's own
+`core:crashreporting-api` on `dev` HEAD before swapping, per the standing rule above:
+byte-identical apart from the package rename (`com.grappim.kit.crash` vs.
+`com.grappim.wallosmobile.core.crashreportingapi`) and no local module-level KDoc. No
+drift found.
+
+- **A mechanical swap, same as `logger` for wallosmobile** — no behavior change. Both
+  flavor implementations (`androidApp/src/gplay/.../di/CrashReporterImpl.kt`,
+  `androidApp/src/fdroid/.../di/CrashReporterImpl.kt`) needed only the import rename, no
+  body changes.
+- **Neither `core:crashreporting-api` nor `core:appinfo-api` was centrally wired via
+  `build-logic`** (unlike `core:logger`'s `configureKmp()` hardcoding) — both were already
+  a per-module explicit `build.gradle.kts` dependency line in every consuming module
+  (`core:api`, `composeApp`, `feature:settings:ui`, `testing`, `androidApp`), same shape
+  `coroutines`' own `core:async-kmp` swap found. Confirms this is a per-module fact to
+  check on every future `core/*` swap, not something to infer from one prior result —
+  `core:logger`'s centralization and `core:async-kmp`/`core:crashreporting-api`/
+  `core:appinfo-api`'s per-module wiring coexisted in the same app the whole time.
+- **`:testing`'s `FakeCrashReporter` needed only the same import rename as any other
+  consumer** — it's a hand-written fake (CLAUDE.md: no mocking libraries), not part of
+  this extraction, but broke the same way any other `CrashReporter` reference did.
+  `grappim-kit-testing`'s own `FakeCrashReporter` (not yet swapped onto — out of scope for
+  this pass, the peer briefing that authorized this swap explicitly excluded `testing`)
+  turned out identical in shape (same three call-recording lists, same defaults) once
+  compared side by side — worth revisiting as a follow-up swap now that both fakes are
+  confirmed structurally interchangeable.
+
+## appinfo (`grappim-kit-appinfo`)
+
+Swapped onto by wallosmobile 2026-09-11 — first consumer, alongside `crash` above. Diffed
+the local `grappim-kit` checkout's `appinfo/src/commonMain/.../AppInfoProvider.kt`
+against wallosmobile's own `core:appinfo-api` on `dev` HEAD before swapping.
+
+- **Not a byte-identical swap — `AppInfoProvider` here is a strict superset.**
+  wallosmobile's own interface only had `isDebug()`/`versionName()`/`versionCode()`; the
+  kit's adds `isFdroidBuild(): Boolean` and `buildType(): String`. Every implementation
+  and hand-written test double of the interface (production `AppInfoProviderImpl`, and a
+  `commonTest`-local anonymous `FakeAppInfoProvider` in
+  `feature/settings/ui/.../AboutViewModelTest.kt`) needed the two new overrides added or
+  the module fails to compile — not optional, since Kotlin requires every interface
+  member implemented. wallosmobile had no pre-existing concept of `isFdroidBuild()`
+  (its own `AboutViewModel`/`InterfaceViewModel` instead read `crashReporter.isAvailable`
+  as the flavor-fact proxy, since that's `true` only on the flavor that also has real
+  crash reporting) — the new methods are implemented but not yet consumed by any screen.
+  **Check what a consumer's existing interface is missing relative to this one before
+  assuming any swap onto `appinfo` is mechanical** — this is the first swap where the kit
+  module turned out richer than the app's own original, the opposite direction from every
+  prior "kit interface is byte-identical or a subset" finding in this file.
+- **`isFdroidBuild()`'s only sane implementation reads `BuildConfig.FLAVOR`**, which AGP
+  generates automatically for every module with `buildConfig = true` (no explicit
+  `buildConfigField` needed) — `BuildConfig.FLAVOR == "fdroid"` for wallosmobile, matching
+  its `AppFlavors.FDROID.title` from `build-logic` (not directly reachable from app
+  runtime code — `build-logic` is buildscript-only — so the flavor name is duplicated as a
+  string literal at the implementation site, not shared). `buildType()` is a straight
+  pass-through of `BuildConfig.BUILD_TYPE`. Both fields exist on `BuildConfig` for any AGP
+  module regardless of whether the app declares them itself — worth checking before
+  assuming a consumer needs new `buildConfigField` plumbing to implement these two
+  methods; it doesn't.
+- **Same per-module (not `build-logic`-centralized) wiring finding as `crash` above** —
+  see that section.
+- **Verified** (both `crash` and `appinfo` together, one swap): `compileGplayDebugKotlin
+  --rerun-tasks` (forces the Koin compiler plugin to re-scan after the DI-relevant
+  package changes) green, `assembleFdroidDebug`/`assembleGplayDebug -PgplayBuild`,
+  `allTests`, `detekt ktlintCheck`, both flavors' Android lint all green.
+  **Device-verified**: cold start on `Medium_Phone_API_36.1` (gplay debug,
+  `-PgplayBuild` + real `google-services.json`) resolves the whole Koin graph and renders
+  the dashboard from the already-logged-in session's cache with no crash; Settings →
+  Interface shows the crash-reporting toggle (`crashReporter.isAvailable == true` on
+  gplay); Settings → About shows the correct version/build (`1.0.3 (4)`, `Debug`) and the
+  gplay-only Privacy Policy button, both driven by the swapped interfaces.
+
+## domain, storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
 Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger`/
-`coroutines` above.
+`coroutines`/`crash`/`appinfo` above.
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
