@@ -590,11 +590,79 @@ alongside `crash` above.**
   click reliability has been degraded since 2026-08-29 (see this app's own memory notes), and
   the format change is already covered by the automated Compose UI test above.
 
-## domain, storage, trustmanager, testing
+## domain (`grappim-kit-domain`)
+
+Swapped onto by wallosmobile 2026-09-11 — first consumer. Diffed the local `grappim-kit`
+checkout's `domain/src/commonMain/.../{PendingCertTrust,ResultExtension,
+UntrustedCertificateException,CertificateHostnameMismatchException}.kt` against
+wallosmobile's own `core:domain` on `dev` HEAD before swapping, per the standing rule
+above.
+
+- **Not a byte-identical swap — two real deltas, both flagged in the peer briefing that
+  authorized this swap rather than found cold.** `PendingCertTrust`/`ResultExtension.kt`
+  matched wallosmobile's originals exactly apart from package and KDoc wording (the kit's
+  own KDoc drops a wallosmobile-specific `plan §4.5`/`(18.1)` citation, expected — those
+  point at an app-local doc the kit can't reference). `UntrustedCertificateException` and
+  `CertificateHostnameMismatchException` did not.
+- **`UntrustedCertificateException` gained an optional `cause: Throwable? = null`
+  constructor param** — wallosmobile's original was single-arg
+  (`class UntrustedCertificateException(val pendingCertTrust: PendingCertTrust) :
+  Exception()`). Checked wallosmobile's only throw site
+  (`core/api/.../CompositeTrustManager.kt`, androidMain): it threw this bare inside a
+  `catch (e: CertificateException)` block, discarding `e` — a real fix to pick up, not
+  just a signature widening, so the swap also changed the throw site to
+  `UntrustedCertificateException(pendingCertTrust(host, leaf), cause = e)`. Confirmed this
+  can't change `findPendingCertTrust()`'s own behavior: it walks the cause chain via
+  `filterIsInstance<UntrustedCertificateException>().firstOrNull()` and stops the moment
+  it finds one, before ever looking at *that* exception's own `cause` — the new link only
+  extends the chain *past* the node every existing caller already stops at, so it's pure
+  additional diagnostic depth (visible to Crashlytics/logcat if this exception is ever
+  logged with its full cause chain), not a behavior change for any existing consumer of
+  `findPendingCertTrust()`. Worth checking on any other app's swap: search for every throw
+  site of this type before assuming the added param is inert.
+- **`CertificateHostnameMismatchException` is new — didn't exist in wallosmobile's
+  original `core:domain` at all.** wallosmobile's own hostname-mismatch branch in
+  `CompositeTrustManager.checkServerTrusted` (`if (host == null ||
+  !hostMatchesCertificate(host, leaf)) throw e`) just rethrows the plain, unwrapped
+  `CertificateException` — nothing there constructs or expects this type. **Left
+  unwired in this swap** — wallosmobile's `CompositeTrustManager` (the `trustmanager`
+  module-to-be) was explicitly out of scope for this pass per the authorizing briefing,
+  so this exception type is currently inert in that app. A future `trustmanager` swap is
+  where it either gets wired into that branch or stays unused; note this rather than
+  assuming a "new type, no consumer" is itself a problem.
+- **`core:domain` was kept, not deleted** (unlike the `crash`/`appinfo` swaps' full
+  module removal) — it still owns wallosmobile's own `WallosError.kt`, deliberately left
+  behind as app-specific per the authorizing briefing. Retargeted via a single
+  `api(libs.grappim.kit.domain)` line in `core/domain/build.gradle.kts`: every one of the
+  ~28 files across the app that imported `PendingCertTrust`/`UntrustedCertificateException`/
+  `resultOf`/`mapResult`/`findPendingCertTrust` already reached them through an existing
+  `implementation(projects.core.domain)` dependency, so `api` on the kit dependency made
+  them all keep compiling through that same edge with only an import-line change
+  (`com.grappim.wallosmobile.core.domain.X` → `com.grappim.kit.domain.X`) — no consumer's
+  own `build.gradle.kts` needed touching. Worth checking on a future swap into a module
+  that isn't being fully deleted: whether the surviving local module can re-export the kit
+  via `api` this way, before assuming every consumer needs its own direct dependency line.
+- Deleted wallosmobile's own local `FindPendingCertTrustTest`/`ResultExtensionTest`
+  (`core:domain`'s `commonTest`) after confirming test-name-for-test-name parity against
+  this module's own `commonTest` suite (`FindPendingCertTrustTest`/`ResultExtensionTest`)
+  — identical coverage, nothing lost.
+- **Verified**: `compileGplayDebugKotlin --rerun-tasks` (forces the Koin compiler plugin
+  to re-scan), `assembleFdroidDebug`/`assembleGplayDebug -PgplayBuild`, `allTests`,
+  `detekt ktlintCheck`, `lintFdroidDebug`/`lintGplayDebug -PgplayBuild` all green.
+  **Device-verified**: cold start on `Medium_Phone_API_36.1` (gplay debug,
+  `-PgplayBuild`) resolves the full Koin graph and renders the dashboard from the
+  already-logged-in session's cache with no crash, no `FATAL`/Koin-resolution lines in
+  logcat. The cause-chain fix itself was not exercised through the actual TLS
+  untrusted-certificate dialog flow — that needs wallosmobile's throwaway TLS-front
+  container (`docs/local-info.txt`, built on demand, not left running) — reasoned safe
+  instead via the `findPendingCertTrust()` cause-chain analysis above rather than
+  device-proven end to end.
+
+## storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
 Add a section here the first time one does, same shape as `navigation`/`uikit`/`logger`/
-`coroutines`/`crash`/`appinfo` above.
+`coroutines`/`crash`/`appinfo`/`domain` above.
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
