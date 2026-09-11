@@ -474,6 +474,24 @@ drift found.
   compared side by side — worth revisiting as a follow-up swap now that both fakes are
   confirmed structurally interchangeable.
 
+**Swapped onto by TaigaMobileNova 2026-09-11 (PR #422) — second consumer, second app,
+alongside `appinfo` below.** Diffed the published `0.1.4` sources (`maven-metadata.xml`
+confirmed both `grappim-kit-crash` and `grappim-kit-appinfo` release at 0.1.4, matching the
+local `grappim-kit` checkout's HEAD — the extraction commit for both was the only one to
+touch either module directory since the 0.1.4 version bump) against this app's own
+`core/crash-api` on `dev` HEAD.
+
+- **Byte-identical, same as wallosmobile's finding** — this app's local `CrashReporter` had
+  the exact same four members with no drift. All four platform implementations
+  (`androidApp/src/gplay`, `androidApp/src/fdroid`, `composeApp/src/iosMain`,
+  `composeApp/src/jvmMain`) needed only the import rename.
+- **`core:crash-api` was already a per-module dependency here too** (`core:api`,
+  `composeApp`, `feature:settings:ui`, `testing`, `androidApp`) — third app-independent
+  confirmation of the "check per-module wiring every time" finding above.
+- Deleted the local `core/crash-api` module outright (mirrors wallosmobile's own crash swap
+  and this repo's own `navigation`/`logger` precedent for a byte-identical interface with no
+  surviving local-only members).
+
 ## appinfo (`grappim-kit-appinfo`)
 
 Swapped onto by wallosmobile 2026-09-11 — first consumer, alongside `crash` above. Diffed
@@ -517,6 +535,60 @@ against wallosmobile's own `core:appinfo-api` on `dev` HEAD before swapping.
   Interface shows the crash-reporting toggle (`crashReporter.isAvailable == true` on
   gplay); Settings → About shows the correct version/build (`1.0.3 (4)`, `Debug`) and the
   gplay-only Privacy Policy button, both driven by the swapped interfaces.
+
+**Swapped onto by TaigaMobileNova 2026-09-11 (PR #422) - second consumer, second app,
+alongside `crash` above.**
+
+- **The opposite direction from wallosmobile's finding: this app's own `AppInfoProvider`
+  was a strict superset of the kit's, not a subset.** Alongside `isDebug()`/
+  `isFdroidBuild()`/`getVersionName()`/`getBuildType()` (all present in the kit, just
+  `get`-prefixed here), this app's interface also carried `getAppInfo(): String` and
+  `getDebugLocalHost(): String`, neither of which the kit's reconciled shape has. Confirms
+  the CLAUDE.md warning above ("check what a consumer's existing interface is missing *or
+  carries extra* relative to this one") cuts both ways - a swap can just as easily need to
+  carve members *out* of a consumer's interface as add them in.
+- **`getAppInfo()` was a pure formatting concern (per this module's own doc comment) and
+  moved into the ViewModel**, composed from `versionName()`/`versionCode()`/`buildType()`
+  directly (`SettingsAboutScreenViewModel.buildAppInfo()`). This app's Android build used to
+  append a fourth, flavor segment (`BuildConfig.FLAVOR`) that desktop/iOS never had (no
+  flavor concept there) - since flavor isn't reachable through the kit's interface, the
+  About screen's flavor suffix was dropped on Android too rather than reconstructed via
+  `isFdroidBuild()` (which can't distinguish "not fdroid" from "not Android" on desktop/iOS).
+  **Visible, user-facing behavior change**, flagged to the app owner rather than decided
+  silently; not a defect in the kit.
+- **`getDebugLocalHost()` had five real call sites this app couldn't drop** (a local-dev
+  network-debugging feature unique to this app, unrelated to wallosmobile's simpler
+  `AppInfoProvider` consumers): `core/api`'s `DebugLocalhostPlugin`, `core/storage`'s
+  `DataStoreServerStorage`/androidMain `ServerStorageImpl`, and `androidApp`'s
+  `ImageLoaderProvider`/`DebugLocalHostImageManager`. Since the kit's interface doesn't (and
+  by design shouldn't) carry this, the local `core/appinfo-api` module was kept alive but
+  narrowed to a single-method `DebugLocalHostProvider` interface; every platform
+  `AppInfoProviderImpl` now implements both it and the kit's `AppInfoProvider` via
+  `@Single(binds = [AppInfoProvider::class, DebugLocalHostProvider::class])` (koin-annotations'
+  multi-bind syntax - untested elsewhere in this app before this swap, confirmed to work via
+  a full DI-graph-resolving build check on all three targets). Each consumer now depends on
+  only the interface(s) it actually calls - `DebugLocalhostPlugin` and
+  `DebugLocalHostImageManager` take just `DebugLocalHostProvider`, not the kit's
+  `AppInfoProvider` at all.
+- **`versionCode(): Int` (new in the kit vs. this app's `String`-typed `BuildConfig.VERSION_CODE`
+  on Android) needed a `.toInt()` at the iOS/JVM call sites** - this app's `BuildKonfig.VERSION_CODE`
+  (a `buildConfigField(FieldSpec.Type.STRING, ...)` in `composeApp/build.gradle.kts`, unlike
+  Android's real `Int`-typed `BuildConfig.VERSION_CODE`) is a numeric string constant, safe to
+  parse unconditionally.
+- **Same per-module (not `build-logic`-centralized) wiring finding as `crash` above.**
+- **Verified**: full `./gradlew jvmTest` (all modules) green including rewritten
+  `SettingsAboutScreenTest`/`DebugLocalhostPluginTest`/`DataStoreServerStorageTest`,
+  `koverXmlReport`/`:koverVerify` (line 95.2%, branch 81.9% - floor holds), `ktlintCheck`
+  green (two `standard:class-signature` violations from the new multi-superclass
+  declarations, both auto-fixed via `ktlint*Format` rather than hand-formatted - see this
+  app's own CLAUDE.md note on that trap), `:androidApp:assembleFdroidDebug` and
+  `:composeApp:compileKotlinIosSimulatorArm64 --rerun-tasks` both green (Koin graph resolves
+  the new multi-bind on both targets). **Desktop-verified**: `:composeApp:run` boots to the
+  login screen with the server-URL field pre-filled from the debug local host - end-to-end
+  proof the new `DebugLocalHostProvider` DI wiring actually works, not just that it compiles.
+  A full click-through to the About screen itself was not completed - this machine's `xdotool`
+  click reliability has been degraded since 2026-08-29 (see this app's own memory notes), and
+  the format change is already covered by the automated Compose UI test above.
 
 ## domain, storage, trustmanager, testing
 
