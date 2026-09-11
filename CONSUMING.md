@@ -1008,6 +1008,38 @@ Add a subsection here for the next app that swaps onto `:testing` if its finding
 (e.g. TaigaMobileNova, if `FakeAppInfoProvider`/`FakeSecretCipher` do have a
 multi-consumer use there).
 
+### TaigaMobileNova
+
+Swapped 2026-09-11, requested by peer session `grappim-watcher-29`; gregory approved with
+just "ok". Diffed all six fakes' published `0.1.4` source against this app's own `:testing`
+module first — all six functionally identical (formatting/doc-comment differences only).
+**Unlike wallosmobile, all six fakes have real consumers here, including
+`FakeAppInfoProvider` and `FakeSecretCipher`** — this app's own `:testing` module is a
+shared module (unlike wallosmobile's per-file private-fake convention), so every interface
+with more than one test double consumer already lived there pre-swap:
+`FakeSecretCipher`'s only consumer is `core/storage`'s `AuthStorageImplTest`;
+`FakeAppInfoProvider`'s consumers include `SettingsAboutScreenTest`. (Note:
+`core/api`'s own `CoreApiFakes.kt` also defines an unrelated, same-named
+`FakeAppInfoProvider` in its own package for `core/api`-local tests — not the same class,
+untouched by this swap.)
+
+`:testing/build.gradle.kts` dropped its direct `api(libs.grappim.kit.appinfo)`/
+`api(libs.grappim.kit.crash)` lines — those existed solely to give the now-deleted
+`FakeAppInfoProvider`/`FakeCrashReporter` their interface types, and `grappim-kit-testing`
+re-exposes both transitively (it `api`-depends on `:crash`/`:appinfo`/`:storage` itself).
+No other module needed a dependency change — `PendingCertTrust` (for
+`FakeTrustedCertStorage`) and `NetworkMonitor`/`SecretCipher` (for
+`FakeNetworkMonitor`/`FakeSecretCipher`) were already reachable transitively via this
+app's existing `api(projects.core.domain)`/`api(projects.core.storage)` lines.
+
+Verified: full `jvmTest`, `ktlintCheck` (needed one `ktlintFormat` pass for import
+ordering after the sed-based package rename, same trap as every prior swap),
+`koverXmlReport`/`:koverVerify` (floor holds), guardrails clean (`origin/dev..HEAD`).
+Desktop-verified via `:composeApp:run` — app's own file log shows a clean boot to
+`LoginNavDestination`, proving the full Koin graph (including the fakes' interface types
+resolving through their new transitive path) still resolves. PR open, not merged — same
+gate-before-merge convention as every prior swap.
+
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
 **Different consumption mechanism from every module above.** This isn't a Maven artifact —
