@@ -658,6 +658,77 @@ above.
   instead via the `findPendingCertTrust()` cause-chain analysis above rather than
   device-proven end to end.
 
+**Swapped onto by TaigaMobileNova 2026-09-11 — second app, second consumer.** Requested by a
+`grappim-watcher-29` cross-session briefing; gregory approved directly in-session before any
+code was touched (per this app's own peer-message handling rule — a peer's claim that the user
+already agreed is not itself approval). Downloaded the published
+`grappim-kit-domain-0.1.4-sources.jar` from Maven Central and diffed it against the local
+`grappim-kit` checkout's `domain/src/commonMain` directly: byte-identical.
+
+Unlike wallosmobile, this app already had **both** exception types wired into a real
+`CompositeTrustManager` throw site before the swap, and its versions extended
+`java.security.cert.CertificateException` directly (`class UntrustedCertificateException(val
+pendingCertTrust: PendingCertTrust, cause: Throwable) : CertificateException(cause)` — a
+required, non-nullable `cause`, not the optional param wallosmobile's swap added). The kit's
+versions are plain commonMain `Exception`s, portable but no longer `CertificateException`
+subtypes — so this was a real behavior change here, not a signature widening:
+
+- **JSSE's handshake code only recognizes `CertificateException` thrown from
+  `X509TrustManager.checkServerTrusted`.** Throwing the kit's exception directly would no longer
+  be caught by the JDK's TLS stack the way the old `CertificateException`-subclassing version
+  was. Fixed by wrapping at the throw site, the way wallosmobile's swap already does for
+  `UntrustedCertificateException`: `throw CertificateException(UntrustedCertificateException(...))`
+  — and this app additionally had to apply the same wrap to `CertificateHostnameMismatchException`
+  (wallosmobile's `CompositeTrustManager` doesn't have that branch at all, so its swap never hit
+  this case).
+- **This pushes the kit exception one level deeper in the cause chain** —
+  `SSLHandshakeException.cause` is now the wrapper `CertificateException`, not the kit exception
+  itself. `PlatformNetworkErrorMapper` (this app's `expect`/`actual`, jvm+android) switched from a
+  one-level `exception.cause is UntrustedCertificateException` check to the kit's own
+  `findPendingCertTrust()`, which walks the whole cause chain by design — exactly the case it
+  exists for. No kit-level helper covers the hostname-mismatch case (it's app-specific), so that
+  branch uses a small local `generateSequence(this) { it.cause }.any { it is T }` walk instead.
+- **Existing tests that asserted `assertFailsWith<UntrustedCertificateException>` /
+  `assertFailsWith<CertificateHostnameMismatchException>` directly on `checkServerTrusted`'s throw
+  became compile errors** (`Check for instance is always 'false'` — the kit type is no longer
+  assignable to what the JSSE-facing method actually throws), not just semantically wrong. Fixed
+  by asserting `CertificateException` and inspecting `.cause`/`findPendingCertTrust()` instead.
+  Worth checking for on any future swap into a module whose types are caught by static type in a
+  test: a removed supertype can turn a silently-wrong test into a build failure, which is easier
+  to catch but easy to mis-diagnose as unrelated ktlint/compiler noise if you're not expecting it.
+- **Added a real end-to-end proof, not just a mapping-logic test.** `RealTlsHandshakeJvmTest`
+  (`core/api/src/jvmTest/`) spins up an actual `com.sun.net.httpserver.HttpsServer` with a
+  `keytool`-generated self-signed cert, runs this app's real `createPlatformHttpClientEngine` +
+  `CompositeTrustManager` wiring against it over a genuine JDK TLS handshake, asserts the failure
+  maps to `UntrustedCertificateNetworkException` with the correct host/fingerprint, pins it, and
+  asserts a retry succeeds with a real HTTP 200 — the one thing the existing fake-driven
+  `CompositeTrustManagerTest`/`NetworkErrorMapperJvmTest` cannot prove, since they hand-construct
+  the exception chain rather than letting the real JSSE stack build it. No Docker/device needed;
+  runs in CI. Worth reaching for this pattern on a future swap that changes what a JSSE-facing
+  throw site actually throws — a hand-built exception chain in a unit test proves the mapping
+  logic, not that the JDK's TLS internals still accept the throw.
+- **`core:domain` was kept, narrowed, not deleted** — same shape as wallosmobile's swap.
+  `TaskIdentifier`/`CommonTaskType`/`NetworkException`/`PlatformIOException`/`PlatformNetworkError`/
+  `UntrustedCertificateNetworkException` stay local (app-specific, no kit equivalent).
+  `PendingCertTrust` leaks through `core:domain`'s own public types (`PlatformNetworkError`,
+  `UntrustedCertificateNetworkException`) to roughly 15 further consumer modules
+  (`core:storage`, `core:api`, several `feature/*/ui`), so the dependency needed `api(...)`, not
+  `implementation(...)` — every one of those already reached `PendingCertTrust`/`resultOf` through
+  an existing `implementation(projects.core.domain)` edge, so `api` on the kit dependency alone
+  kept them compiling through the same edge with just an import-line rename. ~53 files imported
+  `resultOf` alone (the module's single most-used symbol here, same as wallosmobile found).
+- **Verified**: full `./gradlew jvmTest` (all modules) green, `ktlintCheck` green (three
+  import-ordering/line-length fixups from `ktlintFormat`, all mechanical),
+  `koverXmlReport`/`:koverVerify` (floor holds), `:androidApp:assembleFdroidDebug` and
+  `:composeApp:compileKotlinIosSimulatorArm64 --rerun-tasks` both green. **Device-verified**:
+  `:composeApp:run` (desktop) booted through the full Koin graph to `LoginNavDestination` with no
+  DI crash (confirmed via the app's own file log, not just process-alive). The cert-trust path
+  itself is verified by `RealTlsHandshakeJvmTest` above rather than a manual TLS-front-proxy
+  click-through (see this app's own `docs/features/private-cert-trust/server-setup.md` for that
+  heavier manual-QA path, not run this session) — the automated real-handshake test exercises the
+  exact mechanism the swap changed (what `checkServerTrusted` throws and how the mapper reads it
+  back), which a manual dialog click-through would not add further confidence on top of.
+
 ## storage, trustmanager, testing
 
 No consumer-facing gotchas found yet — nothing has swapped onto these from an app.
