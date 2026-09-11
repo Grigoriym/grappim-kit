@@ -895,16 +895,25 @@ Swapped 2026-09-11, requested by peer session `grappim-watcher-29`; gregory appr
 directly in-session. Diffed the published `0.1.4` sources for both artifacts against the
 local `grappim-kit` checkout's HEAD first — `NetworkMonitor`/`NetworkMonitorImpl` (all
 three platforms), `TrustedCertStorage`, and `CompositeTrustManager` (jvm+android) all
-byte-identical to the checkout; `grappim-kit-trustmanager`'s own published *sources* jar
-is empty (only `META-INF/MANIFEST.MF`, no `.kt` at all) and `grappim-kit-storage`'s is
-missing its androidMain/jvmMain sources (only commonMain + iosMain present) — the
-**compiled** jars are fine (`grappim-kit-storage-jvm-0.1.4.jar`/
-`grappim-kit-trustmanager-jvm-0.1.4.jar` both contain the expected classes), so this
-didn't block the swap, but it's a real gap in `grappim-kit`'s publish config (the
-sourcesJar task appears to only pick up `commonMain` for these two modules) worth fixing
-upstream — anyone relying on "download sources jar, diff it" for `storage`/`trustmanager`
-without a local checkout handy would see an empty/partial diff and could wrongly read
-that as "nothing to check."
+byte-identical to the checkout.
+
+**Correction, 2026-09-11 (grappim-watcher session), re: sources jars:** this pass checked
+only the root `grappim-kit-trustmanager`/`grappim-kit-storage` coordinates and read their
+`commonMain`-only (+ `iosMain` for `storage`) content as a broken/incomplete publish. That
+root artifact is the KMP metadata/umbrella publication — by Kotlin Multiplatform's own
+design its sources jar legitimately carries only `commonMain` plus shared intermediate
+source sets, never a target-specific leaf like `androidMain`/`jvmMain`. The actual
+per-target coordinates — `grappim-kit-trustmanager-android`, `grappim-kit-trustmanager-jvm`,
+`grappim-kit-storage-android`, `grappim-kit-storage-jvm` — each carry a complete sources
+jar (`commonMain` + that platform's `Main`), confirmed by downloading all four directly
+from Maven Central. This is the same split-artifact behavior the `logger` section above
+already documented on 2026-09-09 (TaigaMobileNova's own earlier logger swap got this
+right: `grappim-kit-logger-{,android,jvm}-0.1.3-sources.jar`). **Not a `grappim-kit`
+publish bug — no upstream fix needed.** The lesson is the reverse of what this section
+first said: when diffing a multi-target module's published sources, always fetch the
+`-android`/`-jvm`/`-iosarm64` (etc.) suffixed coordinates for the platforms you actually
+need, not the bare root coordinate — the root one being `commonMain`-only is expected,
+not a signal anything is missing.
 
 - **This app's own pre-swap classes were essentially already what got extracted** —
   `NetworkMonitor`(+impls)/`TrustedCertStorage` were mechanical (import-only) swaps, same
