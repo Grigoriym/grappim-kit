@@ -984,12 +984,29 @@ not a signal anything is missing.
 
 ## testing
 
-No consumer-facing gotchas found yet — nothing has swapped onto this from an app. The
-`storage`/`trustmanager` swap above deliberately left `:testing` untouched (its own
-`FakeTrustedCertStorage`/`FakeNetworkMonitor` are out of scope per the crash swap's own
-precedent for excluding `testing`) — wallosmobile kept its local, hand-written fakes,
-updating only their imports to the new kit types. Add a section here the first time
-`grappim-kit-testing` itself gets swapped onto.
+Swapped onto by wallosmobile 2026-09-11 (PR #82, `chore/grappim-kit-testing` → `dev`) —
+first consumer. All gates green (ktlintCheck, detekt, both assemble variants, allTests,
+both lint variants, guardrails clean).
+
+- `FakeCrashReporter`/`MainDispatcherRule` were byte-identical to wallosmobile's own —
+  import rename only.
+- `FakeTrustedCertStorage` was additive-only (extra call-tracking fields, an
+  `asStateFlow()` wrap over the same shape) — all 21 call sites needed only an import
+  rename, no behavioral change.
+- `FakeAppInfoProvider` and `FakeSecretCipher` left **out of scope** — wallosmobile
+  confirmed neither has a multi-consumer use in that app: each interface's only test
+  double is a private, single-file fake by that project's own convention (`:testing` is
+  reserved for doubles more than one module needs). Not forced in just because the kit
+  ships them.
+  - wallosmobile's own local `FakeSecretCipher` isn't a drop-in for the kit's version
+    even if a second consumer turns up later — it models a lost-key/restored-backup case
+    the kit's fake doesn't.
+- `FakeNetworkMonitor` had zero consumers in wallosmobile before or after this swap —
+  pre-existing, not introduced by it.
+
+Add a subsection here for the next app that swaps onto `:testing` if its findings differ
+(e.g. TaigaMobileNova, if `FakeAppInfoProvider`/`FakeSecretCipher` do have a
+multi-consumer use there).
 
 ## build-logic (`grappim-kit/build-logic`, consumed via `includeBuild`, not Maven)
 
