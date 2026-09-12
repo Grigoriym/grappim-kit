@@ -332,6 +332,40 @@ what's actually published. Then diffed those against wallosmobile's own pre-swap
   consumer never needed its own direct dependency on `app-update-ktx`; it was only ever
   there to compile the now-deleted local impl.
 
+**Swapped onto by TaigaMobileNova 2026-09-12 (independently, before reading wallosmobile's
+findings above) — second consumer.** Same verification method: downloaded the published
+`0.1.4` `grappim-kit-appupdate-android`/`-gplay-android`/`-fdroid-android` sources jars
+from Maven Central and diffed them against the local `grappim-kit` checkout's HEAD first
+(byte-identical), then against this app's own pre-swap `androidApp/src/main`, `src/gplay`,
+`src/fdroid` `data/AppUpdateChecker*.kt` on `dev` HEAD.
+
+- **Also byte-identical apart from the package rename and dropped `@Single`** — same
+  cleanest-of-the-swaps result wallosmobile got. Nothing to reconcile.
+- **Landed on the identical fix for the differing-constructor problem independently**,
+  before reading wallosmobile's writeup above: one small `@Module` class per flavor
+  (`AppUpdateModule.kt` in each of `src/gplay`/`src/fdroid`, package
+  `com.grappim.taigamobile.data` — same package the deleted `AppUpdateCheckerImpl.kt`
+  files lived in, not a new `di` package) declaring its own `@Single fun
+  provideAppUpdateChecker(...)`, included into this app's `AndroidModule` via
+  `@Module(includes = [AppUpdateModule::class])`. Two independent sessions converging on
+  the same shape for the same constraint is a reasonable signal this is the right pattern
+  for "kit ships an unannotated impl with a flavor-varying constructor," not just one
+  session's arbitrary choice.
+- **Verified on-device before writing this up, per this app's own CLAUDE.md Verification
+  section** (a compile pass doesn't prove Koin resolution — same point wallosmobile's
+  writeup makes about `KoinGraphTest`'s blind spot): cold-started both
+  `com.grappim.taigamobile.fdroid.debug` and `com.grappim.taigamobile.debug` (gplay) on
+  `Medium_Phone_API_36.1` via `am start -n`. fdroid: process stayed alive,
+  `MainActivity` reached `topResumedActivity`, no `FATAL EXCEPTION`/
+  `NoBeanDefinitionException` in logcat. gplay: same, plus logcat showed PlayCore's real
+  `AppUpdateService` bind and run `requestUpdateInfo`/`registerListener` from
+  `MainActivity.onCreate`/`onResume` — confirming the real impl resolved and ran, not
+  just compiled, matching wallosmobile's finding.
+- **`google-inapp-update-ktx`/`in-app-update` version key dropped from this app's own
+  `libs.versions.toml`/`androidApp/build.gradle.kts` too**, same reasoning as
+  wallosmobile — nothing outside the deleted local impl ever referenced the Play-Core
+  type directly.
+
 ## logger (`grappim-kit-logger`)
 
 Swapped onto by wallosmobile 2026-09-09 (PR #71) — first consumer. Re-diffed 0.1.3's published
