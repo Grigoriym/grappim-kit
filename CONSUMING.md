@@ -298,9 +298,9 @@ section. Shipped as `com.grappim.kit.uikit.widgets.drawer`:
   divider-drop cases), generified over a local test-only enum rather than either app's real
   `DrawerDestination`. `DrawerWidget`/`NavigationSuiteWidget` themselves have no test, same
   gap as every other Compose widget in this module (no Compose-UI-test infrastructure yet).
-- Full build green across `android`/`jvm`/`iosArm64`/`iosSimulatorArm64`. **Not published
-  yet, and no app has been asked about swapping onto it** — same two-part gate as every
-  other module.
+- Full build green across `android`/`jvm`/`iosArm64`/`iosSimulatorArm64`. **Published in
+  `0.1.5` (2026-09-12); no app has been asked about swapping onto it yet** — same
+  two-part gate as every other module.
 
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
