@@ -19,6 +19,14 @@ depend on) against the *canonical* source app's current HEAD — don't trust an 
 verdict or a module's description as still current. Treat "canonical, mechanical swap" as
 a claim to verify, not a fact.
 
+**Version-catalog convention:** `publish.yml` releases every wired module under one shared
+`VERSION_NAME` in the same run, so a consumer should track it with a **single** version-catalog
+key shared by every `grappim-kit-*` dependency, not one key per module — a per-module key can
+only ever drift, never legitimately diverge, since these modules never release independently of
+each other. TaigaMobileNova hit exactly this drift 2026-09-12 (nine of eleven module keys stuck
+at `0.1.4` while two had moved to `0.1.5`) and collapsed its `libs.versions.toml` to one
+`grappimKit` key as the fix.
+
 ## navigation (`grappim-kit-navigation`)
 
 Canonical source: TaigaMobileNova's `core/navigation` (chosen for its tablet-support
