@@ -17,14 +17,26 @@ import javax.crypto.spec.GCMParameterSpec
  * AES/GCM with a key that never leaves the Android Keystore, so [value] is never sitting in
  * cleartext inside a settings file. Stored form is `v1:base64(iv || ciphertext)`.
  *
- * A value with no [CIPHERTEXT_PREFIX] is a plaintext value written before this cipher existed —
- * [decrypt] passes it through unchanged rather than failing; a consuming app migrates it to
- * ciphertext the next time it's written.
- *
  * [keyAlias] is a required constructor param, not hardcoded: two consuming apps sharing a device
  * must not collide on the same Keystore entry.
+ *
+ * [legacyUnprefixedIsPlaintext] controls how a value with no [CIPHERTEXT_PREFIX] is read —
+ * **this only means something for a consumer with pre-existing installs**; a brand-new consumer
+ * can leave it at the default. `true` (default) is TaigaMobileNova's case: a real prior-plaintext
+ * value written before any cipher existed, so [decrypt] passes it through unchanged rather than
+ * failing, and a consuming app migrates it to ciphertext next write. `false` is wallosmobile's
+ * case: the consumer's *own* pre-swap cipher already wrote real ciphertext in this same
+ * `base64(iv || ciphertext)` shape with no prefix (same alias, same AES/GCM/NoPadding, same
+ * 12-byte IV) — for it, an unprefixed value is never plaintext, and the `true` default
+ * misclassifies that real ciphertext as legacy plaintext and returns it undecrypted, silently
+ * corrupting it. Confirmed 2026-09-12: wallosmobile's swap onto this class shipped with the
+ * default and broke the stored API key for every installed user on upgrade (all of
+ * v1.0.0-v1.0.3) — see `CONSUMING.md`'s `storage` section.
  */
-class KeystoreSecretCipher(private val keyAlias: String) : SecretCipher {
+class KeystoreSecretCipher(
+    private val keyAlias: String,
+    private val legacyUnprefixedIsPlaintext: Boolean = true
+) : SecretCipher {
 
     override fun encrypt(value: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -35,7 +47,7 @@ class KeystoreSecretCipher(private val keyAlias: String) : SecretCipher {
 
     @Suppress("ReturnCount")
     override fun decrypt(value: String): String? {
-        if (!value.startsWith(CIPHERTEXT_PREFIX)) return value
+        if (legacyUnprefixedIsPlaintext && !value.startsWith(CIPHERTEXT_PREFIX)) return value
 
         val bytes = try {
             Base64.decode(value.removePrefix(CIPHERTEXT_PREFIX), Base64.NO_WRAP)

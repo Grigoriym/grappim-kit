@@ -976,14 +976,38 @@ diffed those against wallosmobile's own pre-swap `core/storage` on `dev` HEAD.
     upgrading wallosmobile's installed APK in place over a previously-logged-in session
     left the dashboard rendering cached data but the budget cards reading "The instance
     didn't accept this API key" — the corrupted pass-through value sent to the server as
-    the API key. Harmless for an app with no live installs yet (wallosmobile's own
-    pre-v1 rule: stored state is expected to be discarded on a change like this, and a
-    fresh login round-trips correctly under the new format — verified separately, see
-    wallosmobile's own commit). **A consumer with real installs already using
-    `SecretCipher` needs to treat this as a breaking storage-format change**, not assume
-    the kit's passthrough branch makes it backward compatible — it only prevents a
-    *crash*, not silent corruption of a pre-existing encrypted value that happens to have
-    no `"v1:"` prefix.
+    the API key. **A consumer with real installs already using `SecretCipher` needs to
+    treat this as a breaking storage-format change**, not assume the kit's passthrough
+    branch makes it backward compatible — it only prevents a *crash*, not silent
+    corruption of a pre-existing encrypted value that happens to have no `"v1:"` prefix.
+    - **Correction, 2026-09-12: the original "harmless, no live installs yet"
+      assessment here was wrong.** wallosmobile had already shipped v1.0.0-v1.0.3 to
+      real users before this swap landed (commit `3ba6e6d`) — every one of those
+      installs hit exactly this corruption on upgrade, not a hypothetical. Caught when
+      the wallosmobile session filed
+      `wallosmobile/docs/issues/2026-09-12-stale-key-invalid-after-upgrade.md` and
+      flagged it here via cross-session message, asking for the passthrough behavior to
+      be configurable rather than hardcoded. Lesson: "no live installs yet" needs to be
+      checked against the consumer's actual release history before it's used to
+      downgrade a real data-corruption bug to "harmless" — it was assumed here instead
+      of checked.
+    - **Fixed in `grappim-kit`:** `KeystoreSecretCipher` gained a second constructor
+      param, `legacyUnprefixedIsPlaintext: Boolean = true`. Default `true` preserves the
+      existing behavior for TaigaMobileNova (whose *own* pre-swap cipher — the source
+      this behavior was extracted from — already used the same
+      `"v1:"`-prefix/passthrough convention, so an unprefixed value really is legacy
+      plaintext for it). A consumer whose own pre-swap cipher instead wrote real
+      ciphertext with no prefix (wallosmobile's case: same alias, same AES/GCM/NoPadding,
+      same 12-byte IV, bare `base64(iv || ciphertext)`) must pass
+      `legacyUnprefixedIsPlaintext = false`, which makes `decrypt()` attempt every
+      unprefixed value as ciphertext instead of passing it through. `encrypt()` is
+      unchanged — new values always get the `"v1:"` prefix regardless of this flag, so a
+      value written after the fix (or after a fresh login/re-encrypt) decrypts correctly
+      either way; the flag only changes how an *old*, already-on-disk unprefixed value is
+      classified. **Not yet published** — and a consumer with existing corrupted installs
+      (wallosmobile) still needs its own mitigation (force re-login / clear the stored
+      value) independent of this fix, since the fix only prevents *future* swaps from
+      corrupting data — it can't un-corrupt values already corrupted on real devices.
 - **`NoopSecretCipher` (in `SecretCipher.kt`) is new — no wallosmobile equivalent, and
   not consumed by this swap.** Android is wallosmobile's only target, so there is no
   second platform needing a passthrough double. Noted for whichever future consumer
