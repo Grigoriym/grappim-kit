@@ -1200,8 +1200,24 @@ and a throwaway smoke-test module applying all six plugins together built clean 
 in both shapes** (Android-only with `grappimKitEnableAndroidHostTest=true`, matching
 wallosmobile/wayprint's current build-logic; and Android+jvm+ios with
 `grappimKitEnableAndroidHostTest=false`, matching TaigaMobileNova's) — full
-`build`/`check`/`detekt`/`ktlint`/`koverVerify` pipeline green in both. **Not yet verified
-against a real app** — that needs an actual swap (deleting an app's own `build-logic/`,
-adding the properties above, adding the couple of explicit dependency lines the dropped
-implicit injections require), which is the next actionable, gated step whenever the user
-asks for it, same as every other module.
+`build`/`check`/`detekt`/`ktlint`/`koverVerify` pipeline green in both.
+
+**Both wallosmobile and TaigaMobileNova declined the actual swap, 2026-09-12 — treat this
+as off the table for both unless the user re-raises it, not the "next actionable step."**
+Two independent reasons surfaced:
+
+1. **A real, unsolved CI gap.** `includeBuild(path)` only accepts a local filesystem
+   directory — unlike every other `grappim-kit` module, which is a normal pinned Maven
+   coordinate that CI resolves automatically, this one would need a second repo checked
+   out alongside the app in every CI run. Neither app's CI has ever needed that. No
+   submodule/pinned-checkout story has been worked out here yet.
+2. **A direct, blunter user objection.** wallosmobile's session got as far as a full
+   readiness check and had started editing before the user cut it off: "cancel
+   everything, we won't do that, that is cringe." Read broadly, not narrowly — it reads
+   as rejecting the unversioned/side-by-side-repo `includeBuild` consumption model itself,
+   not just the CI gap above.
+
+Both apps' edits were fully reverted (nothing landed, branches deleted, both back on
+their default branch untouched). If this gets revisited later, it needs both a real
+CI-fetch answer and to address why the consumption model itself was rejected — treat any
+future ask as a fresh one, not a resume.
