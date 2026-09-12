@@ -327,6 +327,47 @@ anything.
   or merged — wallosmobile's own CLAUDE.md gates merging any PR on a device pass, which is
   the maintainer's to run, not something to hand back to this file as done.
 
+**Swapped onto by TaigaMobileNova 2026-09-12** — requested by peer `grappim-watcher-f5`;
+gregory approved with "ok". This app is where `DrawerWidget`/`NavigationSuiteWidget` were
+extracted *from* (canonical source, same as `core/navigation`'s pick), so the diff against
+this app's own pre-swap `TaigaDrawerWidget.kt`/`DrawerItem.kt` matched the extraction
+account exactly — pure mechanical port, no undocumented drift, unlike the domain/storage
+swaps.
+
+- **Both widgets adopted** — `TaigaNavigationSuiteWidget` → `NavigationSuiteWidget`, unlike
+  wallosmobile which has no tablet/expanded-width layout.
+- Deleted `TaigaDrawerWidget.kt` and `DrawerItem.kt` (the app-local `DrawerItem`/`IconSource`/
+  `flattenForNavigationSuite`) entirely. `DrawerItemsBuilder.kt`'s ~15 construction sites each
+  changed `label = RString.x` to `label = NativeText.Resource(RString.x)`; `MainViewModel.kt`'s
+  `drawerItems: StateFlow<ImmutableList<DrawerItem>>` became
+  `StateFlow<ImmutableList<DrawerItem<DrawerDestination>>>`; `MainScreen.kt`'s two call sites
+  now pass `headerTitle = NativeText.Resource(RString.app_name)` explicitly (previously read
+  `app_name` internally). `DrawerDestination` (this app's own top-level-route enum) stays
+  local as the `T` type argument, per the module's own design.
+- **The unported `Destination.route: Any` shortcut had zero call sites** in this app either —
+  confirmed via a repo-wide grep before relying on the extraction account's claim that
+  dropping it was safe.
+- Two local tests (`DrawerItemsBuilderTest`, `FlattenForNavigationSuiteTest`) were updated in
+  place rather than deleted, even though the kit's own `DrawerItemTest` now covers
+  `flattenForNavigationSuite`'s pass-through/group-unwrap/divider-drop cases with a synthetic
+  enum — these two exercise the same logic through this app's *real* `DrawerItemsBuilder`/
+  `DrawerDestination` shapes, not a test-only type, so they're not pure duplication.
+- Bumped `grappimKitUikit` 0.1.4 → 0.1.5 in `gradle/libs.versions.toml`. `jetbrainsComposeMaterial3`/
+  `jetbrainsComposeMaterial3Adaptive` version pins (`1.10.0-alpha05`/`1.3.0-rc01`) already
+  matched what the kit's `uikit` module itself pins — no version bump needed there, and
+  `composeApp`'s own direct `material3-adaptive-navigation-suite`/`material3-adaptive`
+  dependency lines stay as-is (still needed locally for `NavigationSuiteScaffoldDefaults`/
+  `currentWindowAdaptiveInfoV2` in `MainScreen.kt`, independent of `uikit`'s own `api` edge).
+- Verified: full `jvmTest`, `ktlintCheck` (clean, no import-ordering fixup needed this time),
+  `koverXmlReport`/`:koverVerify` (floor holds), `KoinGraphTest`, guardrails all green;
+  `:androidApp:assembleFdroidDebug` and `:composeApp:compileKotlinIosSimulatorArm64
+  --rerun-tasks` both succeed. Desktop-verified via `:composeApp:run` — clean boot to
+  `LoginNavDestination` in the app's file log, no DI crash. **Did not click through to a
+  logged-in screen to visually confirm the drawer/rail render** (would need the local Taiga
+  instance + a real login) — same gate-before-merge convention as every prior swap: PR open,
+  not merged, device test (phone drawer + tablet-width rail, per the peer's own request) left
+  for gregory.
+
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
 Extracted 2026-09-09 from wallosmobile's and TaigaMobileNova's near byte-identical
