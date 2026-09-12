@@ -257,8 +257,7 @@ behavior-preserving no-op:
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
 Extracted 2026-09-09 from wallosmobile's and TaigaMobileNova's near byte-identical
-`AppUpdateChecker` (Play In-App Update wrapper). Not yet swapped onto by any app —
-this section covers the extraction shape, not swap findings.
+`AppUpdateChecker` (Play In-App Update wrapper).
 
 - **Three separate artifacts, not one module.** Unlike every other `grappim-kit` module,
   the source apps split this into an interface plus two *build-variant-specific*
@@ -289,6 +288,49 @@ this section covers the extraction shape, not swap findings.
   wholesale copy.
 - **wayprint has no equivalent at all** (FOSS-only distribution, no update-check need) —
   nothing to reconcile there either.
+
+**Swapped onto by wallosmobile 2026-09-12 — first consumer.** Downloaded the published
+`0.1.4` `grappim-kit-appupdate-android`/`grappim-kit-appupdate-gplay-android`/
+`grappim-kit-appupdate-fdroid-android` sources jars from Maven Central and diffed them
+against the local `grappim-kit` checkout's HEAD first, per the standing rule: the
+interface and both impls came back byte-identical, no drift between the checkout and
+what's actually published. Then diffed those against wallosmobile's own pre-swap
+`androidApp/src/main`, `src/gplay`, `src/fdroid` `di/AppUpdateChecker*.kt` on `dev` HEAD.
+
+- **All three files were already byte-identical to wallosmobile's own pre-extraction
+  code apart from the package rename and the dropped `@Single`** — this was the
+  cleanest of the swaps done so far (`domain`/`storage`/`trustmanager` all had at least
+  one real behavioral delta from their source app). Nothing to reconcile, no follow-up
+  needed.
+- **The "no Koin annotation on either impl" bullet above meant a new per-flavor Koin
+  module, not a reused one.** `AndroidModule`'s `@ComponentScan` only covers
+  `com.grappim.wallosmobile.di` and picks up *classes* carrying `@Single`, not member
+  functions — and unlike `core:storage`'s `StorageModule` (which could absorb its three
+  explicit provider functions into one shared `androidMain` class since `NetworkMonitor`/
+  `SecretCipher`/`TrustedCertStorage` all construct the same way on every build), the
+  gplay and fdroid impls take genuinely different constructors (`AppUpdateCheckerImpl
+  (context: Context)` vs. the fdroid one's no-arg constructor) — a single shared provider
+  function can't paper over that. Each flavor got its own small `@Module @Configuration`
+  class (`AppUpdateModule.kt`, one per flavor source set, no `@ComponentScan` needed since
+  it declares its own `@Single` function directly) rather than trying to force one
+  provider signature to fit both.
+- **This is exactly the `AndroidModule`-not-`AppModule` case CLAUDE.md's DI section
+  warns about**: `KoinGraphTest` verifies only `composeApp`'s own graph and structurally
+  cannot see a binding declared in `androidApp`'s `di` package, flavor-swapped or not — a
+  missing/broken provider here is a runtime crash at first injection, not a test
+  failure. Compiling both `compileFdroidDebugKotlin` and `compileGplayDebugKotlin -Prerun-tasks`
+  proves the impl classes exist and satisfy the interface but not that Koin can actually
+  resolve them. **Verified on-device**: cold-started both `installFdroidDebug` and
+  `installGplayDebug -PgplayBuild` on `Medium_Phone_API_36.1` — fdroid reached the login
+  screen with no crash (no-op checker, nothing observable in logcat), gplay reached a
+  logged-in Dashboard and logcat showed `PlayCore`'s real `AppUpdateService` actually bind
+  and run `requestUpdateInfo`/`registerListener` from `MainActivity.onCreate`/`onResume`,
+  confirming the real Play-Core-backed impl resolved and ran, not just compiled.
+- **`google-inapp-update-ktx`/`in-app-update` version key dropped entirely from
+  wallosmobile's own `libs.versions.toml`** — `AppUpdateCheckerImpl`'s public surface
+  (`Activity`/`Flow<UpdateState>` only) never leaked a Play-Core type to begin with, so a
+  consumer never needed its own direct dependency on `app-update-ktx`; it was only ever
+  there to compile the now-deleted local impl.
 
 ## logger (`grappim-kit-logger`)
 
