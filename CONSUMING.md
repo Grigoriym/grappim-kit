@@ -299,8 +299,33 @@ section. Shipped as `com.grappim.kit.uikit.widgets.drawer`:
   `DrawerDestination`. `DrawerWidget`/`NavigationSuiteWidget` themselves have no test, same
   gap as every other Compose widget in this module (no Compose-UI-test infrastructure yet).
 - Full build green across `android`/`jvm`/`iosArm64`/`iosSimulatorArm64`. **Published in
-  `0.1.5` (2026-09-12); no app has been asked about swapping onto it yet** — same
-  two-part gate as every other module.
+  `0.1.5` (2026-09-12)**.
+
+**Swapped onto by wallosmobile 2026-09-12 — first consumer, PR open, not yet merged.**
+Prompted by a `grappim-watcher` cross-session message rather than a request from gregory
+directly; per the standing rule that a peer can flag a candidate swap but not authorize
+landing it unilaterally, this diffed the actual `grappim-kit` checkout's `DrawerWidget.kt`/
+`DrawerItem.kt`/`IconSource.kt` source directly against wallosmobile's own `dev` HEAD (not
+the extraction account above, which could have gone stale since 2026-09-12) before touching
+anything.
+
+- **Confirmed byte-for-byte structural match modulo the documented generification** —
+  `IconSource` was already identical; `DrawerItem`/`DrawerWidget` differed from
+  wallosmobile's pre-swap code only in exactly the two ways this section already
+  describes (`T` generic, `NativeText` instead of `StringResource`). No undocumented
+  drift found, no product/UX decision needed — a pure mechanical port.
+- **`NavigationSuiteWidget` not adopted** — wallosmobile has no tablet/expanded-width
+  layout, confirming the "may just be unused for you" note above.
+- Deleted wallosmobile's local `WallosDrawerWidget.kt` wrapper and `nav/DrawerItem.kt`
+  entirely rather than keeping a thin wrapper — `AuthenticatedMainScreen` now calls
+  `DrawerWidget` directly and supplies `headerTitle = NativeText.Resource(RString.app_name)`,
+  matching the no-wrapper precedent `TopBar` already set in that app (no `WallosTopBar`
+  exists either).
+- Bumped `grappimKitUikit` 0.1.4 → 0.1.5 in wallosmobile's `libs.versions.toml`; both
+  `assembleGplayDebug -PgplayBuild`/`assembleFdroidDebug`-equivalent compiles, `detekt
+  ktlintCheck`, both `lint*Debug` variants and `allTests` all green. Not yet device-tested
+  or merged — wallosmobile's own CLAUDE.md gates merging any PR on a device pass, which is
+  the maintainer's to run, not something to hand back to this file as done.
 
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
