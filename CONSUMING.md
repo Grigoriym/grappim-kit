@@ -254,6 +254,54 @@ behavior-preserving no-op:
   `resetTo()` note), so no test was added here either — worth adding if/when that
   infrastructure exists. Not yet swapped onto by any app.
 
+**`widgets/drawer` added 2026-09-12** — a `grappim-watcher`-side survey looking for
+duplication `androidApp`/`composeApp` never covered (the 2026-09-09 "Step 10" survey
+scoped to `core/*` only) found wallosmobile's `WallosDrawerWidget` and TaigaMobileNova's
+`TaigaDrawerWidget` were the same "same-origin, already drifted" pattern `TopBar` already
+went through. Full account: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s new "Step 12"
+section. Shipped as `com.grappim.kit.uikit.widgets.drawer`:
+
+- **`IconSource`** — byte-identical in both apps, ported verbatim.
+- **`DrawerItem<out T>`** — near byte-identical (`Group`/`Destination`/`Divider`), generified
+  over the caller's own top-level-route type `T` (each app's `DrawerDestination` enum stays
+  local, the same way `core/navigation`'s route keys never became a `grappim-kit` type).
+  `label` uses `NativeText` (already established for `TopBarConfig.title`) instead of a raw
+  `StringResource` — `DrawerItem` never needs the app's own generated `Res` class directly.
+  Taiga's `Destination.route: Any` computed shortcut (`destination.route`) was **not**
+  ported — it assumes `T` has a `.route` property, which a generic type can't express; a
+  consuming app that wants this calls `drawerItem.destination.route` itself, since its own
+  `T` is its own concrete `DrawerDestination` with a real `.route`.
+- **`DrawerWidget`** — the phone-width `ModalNavigationDrawer`, generic over `T`. The header
+  title (each app hardcoded its own `app_name` string resource) is now a caller-supplied
+  `headerTitle: NativeText` parameter, same caller-supplies-its-own-strings convention as
+  `TopBar`'s Back/Menu content descriptions.
+- **`NavigationSuiteWidget`** (+ `flattenForNavigationSuite`) — TaigaMobileNova's
+  tablet/expanded-width counterpart (`NavigationSuiteScaffold`-backed), wallosmobile has no
+  equivalent — same richer-union-from-Taiga pattern as `core/navigation`'s tablet sub-stacks
+  and `core/logger`'s extra platform backends. Needed a new dependency,
+  `material3-adaptive-navigation-suite` (+ `material3-adaptive`), added to `uikit` as `api`
+  since `NavigationSuiteType` appears in the public signature — version pinned to what
+  TaigaMobileNova's own `libs.versions.toml` already used (`1.10.0-alpha05` /
+  `1.3.0-rc01`), not independently chosen.
+- **Compose-context gotcha found while porting, not present in either source app's original
+  code**: hoisting `destination.label.asString()` into a plain `val` inside the
+  `destinations.forEach { ... }` body (before passing it into `item()`'s `icon`/`label`
+  slot lambdas) failed `compileKotlinIosArm64` with "`@Composable` invocations can only
+  happen from the context of a `@Composable` function" — `NavigationSuiteScope.item(...)`
+  itself isn't `@Composable` (same shape as `LazyListScope.item {}`), only its `icon`/
+  `label` lambda *parameters* are, so a composable call has to happen inside one of those
+  lambdas, not in the argument-preparation statements around the `item(...)` call. Fixed by
+  calling `.asString()` separately inside each of `icon = { ... }`/`label = { ... }`
+  instead of sharing one hoisted value — matches the (slightly more verbose) shape the
+  original TaigaMobileNova code already used, which is why neither source app hit this.
+- Ported test: `DrawerItemTest` (`flattenForNavigationSuite`'s pass-through/group-unwrap/
+  divider-drop cases), generified over a local test-only enum rather than either app's real
+  `DrawerDestination`. `DrawerWidget`/`NavigationSuiteWidget` themselves have no test, same
+  gap as every other Compose widget in this module (no Compose-UI-test infrastructure yet).
+- Full build green across `android`/`jvm`/`iosArm64`/`iosSimulatorArm64`. **Not published
+  yet, and no app has been asked about swapping onto it** — same two-part gate as every
+  other module.
+
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
 Extracted 2026-09-09 from wallosmobile's and TaigaMobileNova's near byte-identical

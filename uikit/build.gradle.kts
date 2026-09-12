@@ -29,6 +29,9 @@ kotlin {
             implementation(libs.jetbrains.compose.foundation)
             // `api`: TopBarConfig/NativeText expose these types in their public signatures.
             api(libs.jetbrains.compose.material3)
+            // `api`: NavigationSuiteWidget exposes `NavigationSuiteType` in its public signature.
+            api(libs.jetbrains.compose.material3.adaptive.navigation.suite)
+            api(libs.jetbrains.compose.material3.adaptive)
             api(libs.jetbrains.compose.components.resources)
             api(libs.jetbrains.compose.icons)
             api(libs.kotlinx.collections.immutable)
