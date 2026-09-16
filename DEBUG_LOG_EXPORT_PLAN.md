@@ -55,10 +55,14 @@ per platform:
     `NSLogLogger()` when off. Reusable beyond this feature too.
   - Or fold file-writing directly into `NSLogLogger` itself, gated by a constructor flag /
     mutable property. Less composable, but no new public type.
-- **JVM**: `FileLogger` already exists and is always-on. Decide whether desktop also gets
-  gated behind the same toggle for consistency across platforms, or keeps its current
-  always-on behavior since nobody has flagged it as a problem. Not decided — ask gregory
-  if it comes up, don't assume either way.
+- **JVM**: `FileLogger` already exists and was always-on. **Resolved 2026-09-16 — gregory: gate
+  it behind the same toggle as Android/iOS, for consistency.** No new kit-side API was needed for
+  this: `FileLogger.install(logFile)`'s existing guard already supports an off→on→off→on cycle
+  correctly (`KitLogger.uninstall()` reverts to the no-op logger; a later `install()` reattaches).
+  The change is call-site-only — a consuming app wires `install()`/`KitLogger.uninstall()` to the
+  toggle instead of calling `install()` unconditionally at startup. See `CONSUMING.md`'s logger
+  section for the existing desktop call site (TaigaMobileNova) that will need to move behind the
+  toggle when this feature is consumed.
 
 ## What's explicitly out of scope for this module
 

@@ -14,6 +14,7 @@ class FileLoggerTest {
 
     @AfterTest
     fun tearDown() {
+        KitLogger.uninstall()
         tempDir.deleteRecursively()
     }
 
@@ -59,5 +60,19 @@ class FileLoggerTest {
         logger.log(LogPriority.INFO, null, null) { "after rotation" }
 
         assertFalse(oldFile.readText().contains("stale"))
+    }
+
+    @Test
+    fun `install re-attaches after uninstall, supporting a toggle turned off then on again`() {
+        FileLogger.install(logFile)
+
+        KitLogger.uninstall()
+        assertFalse(KitLogger.isInstalled)
+
+        FileLogger.install(logFile)
+        assertTrue(KitLogger.isInstalled)
+        KitLogger.logger.log(LogPriority.INFO, null, null) { "back on" }
+
+        assertTrue(logFile.readText().endsWith("back on\n"))
     }
 }

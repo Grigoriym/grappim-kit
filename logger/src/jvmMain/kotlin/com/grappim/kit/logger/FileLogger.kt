@@ -6,9 +6,13 @@ import java.io.FileWriter
 /**
  * Writes log lines to [logFile], rotating it to `<name>.old` once it exceeds
  * [MAX_LOG_FILE_BYTES] so a long-running desktop session can't grow the file unbounded.
- * Always-on once installed — not gated behind the opt-in "debug mode" toggle Android/iOS use,
- * since desktop's always-on behavior hasn't been flagged as a problem (see
- * `DEBUG_LOG_EXPORT_PLAN.md`; open question, not a settled decision).
+ *
+ * Gated behind the same opt-in "debug mode" toggle Android/iOS use (gregory's call,
+ * 2026-09-16 — see `DEBUG_LOG_EXPORT_PLAN.md`): a consuming app should only call [install] when
+ * the toggle is on, and call [KitLogger.uninstall] when it's off, rather than installing this
+ * unconditionally at startup. [install]'s not-already-installed guard makes that on/off/on cycle
+ * safe — after [KitLogger.uninstall] reverts to the no-op logger, a later [install] call attaches
+ * a fresh [FileLogger] instance to the same [logFile] normally.
  */
 class FileLogger(private val logFile: File) : KitLogger {
 

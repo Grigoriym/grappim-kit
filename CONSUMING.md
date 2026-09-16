@@ -568,11 +568,17 @@ identical. When a consuming app wires this in:
   would keep working but wouldn't reach the file until the app reinstalls the composite itself.
   To turn the toggle off again, the app calls `KitLogger.install(NSLogLogger())` directly (there's
   no `FileKitLogger.uninstall()`) — the plain instance, not the composite, is what "off" means.
-- **Desktop's `FileLogger` deliberately did *not* get gated behind the toggle** — it's still
-  always-on once installed, same as before this feature. The plan doc flagged whether desktop
-  should also require opt-in as an open question for gregory, not a settled decision; nothing
-  forced an answer during implementation, so it was left alone rather than guessed at. Ask before
-  assuming either way if a desktop consumer wants this.
+- **Desktop's `FileLogger` is gated behind the toggle too, same as Android/iOS** — gregory's
+  answer (2026-09-16) to the plan doc's open question. No kit-side API changed to make this
+  true: `FileLogger.install(logFile)`'s existing not-already-installed guard already makes an
+  off→on→off→on cycle safe (`KitLogger.uninstall()` reverts to the no-op logger; a later
+  `install()` attaches a fresh instance). **The change is in how a consuming app calls it** — only
+  call `FileLogger.install(logFile)` when the debug-mode toggle is on, and call
+  `KitLogger.uninstall()` when it's off, instead of calling `install()` unconditionally at
+  startup. TaigaMobileNova's existing desktop entry point (`TaigaMobileDesktop.kt`'s
+  `FileLogger.install(...)`, from the original `logger` swap, PR #413) calls it unconditionally
+  today — that call site will need to move behind the toggle when this feature gets consumed,
+  not just added to as a new feature.
 - **Kit-side scope stops at "here's a file on disk."** No share-intent UI, no `UIActivityViewController`
   wiring, no log-content sanitization, no privacy-policy text — all explicitly out of scope for
   `grappim-kit` per the plan doc. Each consuming app builds its own share flow around the path it
