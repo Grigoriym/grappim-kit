@@ -2,15 +2,13 @@ package com.grappim.kit.logger
 
 import java.io.File
 import java.io.FileWriter
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-
-private const val MAX_LOG_FILE_BYTES = 5L * 1024 * 1024
-private val TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
 /**
  * Writes log lines to [logFile], rotating it to `<name>.old` once it exceeds
  * [MAX_LOG_FILE_BYTES] so a long-running desktop session can't grow the file unbounded.
+ * Always-on once installed — not gated behind the opt-in "debug mode" toggle Android/iOS use,
+ * since desktop's always-on behavior hasn't been flagged as a problem (see
+ * `DEBUG_LOG_EXPORT_PLAN.md`; open question, not a settled decision).
  */
 class FileLogger(private val logFile: File) : KitLogger {
 
@@ -19,12 +17,9 @@ class FileLogger(private val logFile: File) : KitLogger {
     }
 
     override fun log(priority: LogPriority, tag: String?, throwable: Throwable?, message: () -> String) {
-        val timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER)
-        val prefix = tag?.let { "[$it] " } ?: ""
-        val throwableText = throwable?.let { "\n${it.stackTraceToString()}" } ?: ""
-        val line = "$timestamp ${priority.name.first()}/$prefix${message()}$throwableText\n"
+        val line = formatLogLine(priority, tag, throwable, message())
         synchronized(this) {
-            if (logFile.length() > MAX_LOG_FILE_BYTES) {
+            if (shouldRotate(logFile.length())) {
                 rotate()
             }
             FileWriter(logFile, true).use { it.write(line) }

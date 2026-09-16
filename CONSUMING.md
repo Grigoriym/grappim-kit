@@ -546,6 +546,55 @@ itself, not just wallosmobile's checkout state at extraction time, is what's cle
   mechanism (a comment, not a resolvable reference) — grep broadly for the old name in prose too,
   not just in code that would fail to compile.
 
+**Debug log export (opt-in "debug mode" toggle → file), added 2026-09-16 — not swapped onto by
+any app yet.** New development, not an extraction; full design is in this repo's
+`DEBUG_LOG_EXPORT_PLAN.md`. Two decisions this shipped under, don't re-litigate: opt-in only
+(nothing persists until a toggle flips it on), and shared across all four apps rather than
+app-local. Adds `CompositeKitLogger` (`commonMain`) plus a file-writing backend per platform,
+each reusing shared rotation logic (`MAX_LOG_FILE_BYTES`/`shouldRotate`/`formatLogLine`, all
+`internal`, not public API) so the three platforms' log lines and rotation behavior stay
+identical. When a consuming app wires this in:
+
+- **Android needs no `KitLogger`/toggle-swap dance — plant `RotatingFileTree` as a second Timber
+  tree.** Android's fan-out already happens at the Timber layer (apps already plant a debug-only
+  `DebugTree`/Crashlytics tree alongside `TimberLogger.install()`), so `RotatingFileTree` is just
+  another `Timber.Tree` the app plants/unplants itself via `Timber.plant()`/`Timber.uproot()` when
+  the toggle flips. It does not touch `KitLogger` at all — don't look for an `install()`/`enabled`
+  parameter on it, there isn't one by design.
+- **iOS's `FileKitLogger.install(filePath)` wraps whatever is currently installed, not just
+  `NSLogLogger` specifically.** It reads `KitLogger.logger` at call time and composes it with the
+  new file sink via `CompositeKitLogger`, so call it *after* `NSLogLogger.install()` at startup,
+  not before — installing it first would wrap `NoLog` instead of the real sink, and NSLog output
+  would keep working but wouldn't reach the file until the app reinstalls the composite itself.
+  To turn the toggle off again, the app calls `KitLogger.install(NSLogLogger())` directly (there's
+  no `FileKitLogger.uninstall()`) — the plain instance, not the composite, is what "off" means.
+- **Desktop's `FileLogger` deliberately did *not* get gated behind the toggle** — it's still
+  always-on once installed, same as before this feature. The plan doc flagged whether desktop
+  should also require opt-in as an open question for gregory, not a settled decision; nothing
+  forced an answer during implementation, so it was left alone rather than guessed at. Ask before
+  assuming either way if a desktop consumer wants this.
+- **Kit-side scope stops at "here's a file on disk."** No share-intent UI, no `UIActivityViewController`
+  wiring, no log-content sanitization, no privacy-policy text — all explicitly out of scope for
+  `grappim-kit` per the plan doc. Each consuming app builds its own share flow around the path it
+  already has (Android: the `File` passed into `RotatingFileTree`'s constructor; iOS: the
+  `filePath` string passed into `FileKitLogger.install`; desktop: same `File` as always). Each app
+  is also responsible for auditing its own `logcat()` call sites for anything sensitive before
+  shipping this — the kit has no way to know what a given call site logs (TaigaMobileNova has
+  precedent for this kind of sweep — see its `ExceptionSanitization.kt`/MASVS-PRIVACY-3 fix).
+- **New `commonMain` dependencies**: `kotlinx-datetime` (shared timestamp formatting, replacing
+  JVM's old `java.time` usage) and `kotlinx-atomicfu` (iOS's `FileKitLogger` needs a real lock —
+  Kotlin/Native has no JVM-style `synchronized` — and `SynchronizedObject`/`synchronized{}` from
+  atomicfu was already proven elsewhere in this repo, in `coroutines/ThreadSafeMap.kt`, rather than
+  reaching for a new dependency). Both were already in the version catalog, unused until now.
+- **`kotlin.time.Clock`/`Clock.System` needs `kotlinx.datetime`'s `Clock` typealias avoided in
+  favor of importing `kotlin.time.Clock` directly, plus `@OptIn(ExperimentalTime::class)`** — on
+  this repo's Kotlin 2.4.10/kotlinx-datetime 0.8.0 pairing, `import kotlinx.datetime.Clock` (the
+  deprecated typealias to `kotlin.time.Clock`) resolved `Clock` fine but failed with "Unresolved
+  reference 'System'" on `Clock.System`; switching the import to `kotlin.time.Clock` fixed it.
+  Also: `LocalDateTime.monthNumber` is deprecated in favor of `month.number`, and `Month.number`
+  is a top-level extension property in the `kotlinx.datetime` package that needs its own explicit
+  `import kotlinx.datetime.number` — it isn't visible just from importing `LocalDateTime`.
+
 ## coroutines (`grappim-kit-coroutines`)
 
 Swapped onto by wallosmobile 2026-09-11 — first consumer. Re-diffed 0.1.4's published

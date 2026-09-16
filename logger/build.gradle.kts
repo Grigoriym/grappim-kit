@@ -21,10 +21,17 @@ kotlin {
     }
 
     sourceSets {
+        commonMain.dependencies {
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.atomicfu)
+        }
         androidMain.dependencies {
             implementation(libs.timber)
         }
         commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+        jvmTest.dependencies {
             implementation(kotlin("test"))
         }
     }
