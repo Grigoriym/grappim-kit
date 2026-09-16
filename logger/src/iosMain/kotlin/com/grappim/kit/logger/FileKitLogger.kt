@@ -23,6 +23,11 @@ import platform.posix.rename
  * Install via [install], which wraps whatever [KitLogger] is currently installed (typically
  * [NSLogLogger]) in a [CompositeKitLogger] so enabling this doesn't drop existing NSLog output.
  * Call [KitLogger.install] with a fresh logger directly to disable it again.
+ *
+ * **No sanitization.** Every [logcat] call site's output goes into the file at [filePath]
+ * verbatim — API keys, tokens, request/response bodies, anything. This module has no way to know
+ * which call sites in a consuming app log something sensitive, so that audit is the consuming
+ * app's job, before enabling this in a release build. See `CONSUMING.md`'s logger section.
  */
 @OptIn(ExperimentalForeignApi::class)
 class FileKitLogger(private val filePath: String) : KitLogger {

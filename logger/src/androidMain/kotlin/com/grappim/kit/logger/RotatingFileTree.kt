@@ -14,6 +14,11 @@ import java.io.FileWriter
  * Plant/unplant it yourself via [Timber.plant]/[Timber.uproot] when a debug-mode toggle flips —
  * this class doesn't install itself, matching how consuming apps already plant their other trees
  * (e.g. a debug-only `DebugTree`) directly.
+ *
+ * **No sanitization.** Every Timber log call's output goes into [logFile] verbatim — API keys,
+ * tokens, request/response bodies, anything. This module has no way to know which call sites in
+ * a consuming app log something sensitive, so that audit is the consuming app's job, before
+ * enabling this in a release build. See `CONSUMING.md`'s logger section.
  */
 class RotatingFileTree(private val logFile: File) : Timber.Tree() {
 

@@ -13,6 +13,11 @@ import java.io.FileWriter
  * unconditionally at startup. [install]'s not-already-installed guard makes that on/off/on cycle
  * safe — after [KitLogger.uninstall] reverts to the no-op logger, a later [install] call attaches
  * a fresh [FileLogger] instance to the same [logFile] normally.
+ *
+ * **No sanitization.** Every [logcat] call site's output goes into [logFile] verbatim — API
+ * keys, tokens, request/response bodies, anything. This module has no way to know which call
+ * sites in a consuming app log something sensitive, so that audit is the consuming app's job,
+ * before enabling this in a release build. See `CONSUMING.md`'s logger section.
  */
 class FileLogger(private val logFile: File) : KitLogger {
 
