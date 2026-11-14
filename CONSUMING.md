@@ -1262,8 +1262,8 @@ not a signal anything is missing.
 ## customheaders (`grappim-kit-customheaders`)
 
 Extracted 2026-11-14 from wallosmobile (`core/api` + `core/storage/customheaders`, #107) and
-TaigaMobileNova (same paths, #468, a port of wallosmobile's). Not published yet; no app
-swapped. Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
+TaigaMobileNova (same paths, #468, a port of wallosmobile's). First published in `0.1.8`
+(2026-11-14); no app swapped yet. Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
 section. Package `com.grappim.kit.customheaders`: `CustomHeader`(+`isBlank()`),
 `CustomHeaderError`, `CustomHeaderValidator`, `CustomHeadersStorage`(+`Impl`), the
 `CustomHeaders` Ktor plugin + `CustomHeadersConfig`, `LoggingConfig.sanitizeCustomHeaders()`.
