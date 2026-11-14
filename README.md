@@ -51,9 +51,13 @@ One shared version number covers the whole repo (see the plan doc for why).
 - `trustmanager` (`grappim-kit-trustmanager`) — `X509TrustManager` decorator combining
   the device CA store with a trust-on-first-use `TrustedCertStorage` pin. `jvm`/`android`
   only — `X509ExtendedTrustManager` has no iOS equivalent.
+- `customheaders` (`grappim-kit-customheaders`) — user-defined request headers for an
+  authenticating reverse proxy: a Ktor client plugin that sends them only to the server's own
+  origin (and drops them on a redirect off it), a log sanitizer, a validator with
+  app-supplied reserved names, and `SecretCipher`-encrypted DataStore storage.
 - `testing` (`grappim-kit-testing`) — shared `kotlin.test` fakes and rules
   (`MainDispatcherRule`, `FakeCrashReporter`, `FakeAppInfoProvider`, `FakeNetworkMonitor`,
-  `FakeTrustedCertStorage`, `FakeSecretCipher`).
+  `FakeTrustedCertStorage`, `FakeSecretCipher`, `FakeCustomHeadersStorage`).
 - `uikit` (`grappim-kit-uikit`) — `KitTheme`/`KitPreviewTheme` (Material3 theme scaffolding,
   colors/typography supplied by the app), a hardened `SafeUriHandler`, top-bar widgets
   (`TopBar`/`TopBarConfig`/`TopBarController`/`NavigationIconConfig`/`TopBarAction`), and

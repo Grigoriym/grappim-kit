@@ -28,11 +28,12 @@ kotlin {
             api(libs.kotlinx.coroutines.test)
 
             // `FakeCrashReporter`/`FakeAppInfoProvider`/`FakeNetworkMonitor`/`FakeTrustedCertStorage`/
-            // `FakeSecretCipher` implement these -- consumers resolve the interfaces through here,
+            // `FakeSecretCipher`/`FakeCustomHeadersStorage` implement these -- consumers resolve the interfaces through here,
             // same shape the source apps' own `:testing` used.
             api(project(":crash"))
             api(project(":appinfo"))
             api(project(":storage"))
+            api(project(":customheaders"))
         }
     }
 }

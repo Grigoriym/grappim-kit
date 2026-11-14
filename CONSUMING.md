@@ -1259,6 +1259,45 @@ not a signal anything is missing.
   resolve at runtime on the jvm target. PR open, not merged — same gate-before-merge
   convention as every prior TaigaMobileNova swap.
 
+## customheaders (`grappim-kit-customheaders`)
+
+Extracted 2026-11-14 from wallosmobile (`core/api` + `core/storage/customheaders`, #107) and
+TaigaMobileNova (same paths, #468, a port of wallosmobile's). Not published yet; no app
+swapped. Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
+section. Package `com.grappim.kit.customheaders`: `CustomHeader`(+`isBlank()`),
+`CustomHeaderError`, `CustomHeaderValidator`, `CustomHeadersStorage`(+`Impl`), the
+`CustomHeaders` Ktor plugin + `CustomHeadersConfig`, `LoggingConfig.sanitizeCustomHeaders()`.
+The settings screen/ViewModel and login wiring stay in each app.
+
+Differences from both apps' copies:
+
+- **`CustomHeaderValidator` is a plain class taking `reservedNames`.** Default
+  `CustomHeaderValidator.DEFAULT_RESERVED_NAMES` = wallosmobile's list (`Host`,
+  `Content-Length`, `Content-Type`, `Transfer-Encoding`, `Upgrade`, `Connection`, `Cookie`).
+  **TaigaMobileNova must pass `DEFAULT_RESERVED_NAMES + listOf("Authorization", "User-Agent")`**
+  or it silently starts accepting both (it sets its own bearer token and per-request
+  User-Agent). Taiga called it as an `object` (`CustomHeaderValidator.validate(...)`);
+  wallosmobile injected a Koin `@Single`. Both now construct/bind it themselves.
+- **No DI annotations on `CustomHeadersStorageImpl`.** wallosmobile's was
+  `@Single(binds = [CustomHeadersStorage::class]) internal`; bind it in the app's Koin
+  module instead. `json` defaults to `Json` (both apps passed a plain `Json`).
+- **Decode failure catches `IllegalArgumentException`** (wallosmobile's) rather than Taiga's
+  narrower `SerializationException`. Superset; behavior for bad JSON is unchanged.
+- **Storage key is still `custom_headers`**, value still `SecretCipher`-encrypted JSON, so a
+  swap reads what the app already stored, as long as the app passes the same
+  `DataStore<Preferences>` and `SecretCipher` it used before. Check that on the swap, don't
+  assume it (see `storage`'s `v1:`-prefix incident above).
+- `sanitizeCustomHeaders` is public now (was `internal` to each app's `core/api`).
+- `FakeCustomHeadersStorage` lives in `grappim-kit-testing`: wallosmobile's
+  `setHeadersCalledWith` list plus Taiga's failure switch, now `setHeadersThrows: Throwable?`
+  (Taiga's was a `Boolean` throwing its own `testException`). Taiga's `setHeadersCallCount`
+  becomes `setHeadersCalledWith.size`.
+
+Dependencies: `api` on `grappim-kit-storage`, `datastore-preferences-core`,
+`ktor-client-core` and `ktor-client-logging` (all on the public API); Ktor `3.5.2`. Targets:
+android, jvm, iosArm64, iosSimulatorArm64. Tests (27, both apps' cases merged) run on jvm;
+iOS test code compiles but doesn't run on Linux, same as every module.
+
 ## testing
 
 Swapped onto by wallosmobile 2026-09-11 (PR #82, `chore/grappim-kit-testing` → `dev`) —
