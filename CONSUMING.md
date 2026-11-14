@@ -1263,7 +1263,7 @@ not a signal anything is missing.
 
 Extracted 2026-11-14 from wallosmobile (`core/api` + `core/storage/customheaders`, #107) and
 TaigaMobileNova (same paths, #468, a port of wallosmobile's). First published in `0.1.8`
-(2026-11-14). Swapped: wallosmobile (PR #137, 2026-11-14). Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
+(2026-11-14). Swapped: wallosmobile (PR #137, 2026-11-14), TaigaMobileNova (PR #477, 2026-11-14). Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
 section. Package `com.grappim.kit.customheaders`: `CustomHeader`(+`isBlank()`),
 `CustomHeaderError`, `CustomHeaderValidator`, `CustomHeadersStorage`(+`Impl`), the
 `CustomHeaders` Ktor plugin + `CustomHeadersConfig`, `LoggingConfig.sanitizeCustomHeaders()`.
@@ -1307,6 +1307,23 @@ it only re-exports kit-testing. **Upgrade verified on an emulator:** a header wa
 `install -r`. The header was still listed with its value and was sent on the next request. That works
 because both builds use the same DataStore file and the same `KeystoreSecretCipher` alias. An app that
 built its storage from a different `DataStore`/cipher instance than its API key would not get this for free.
+
+**TaigaMobileNova swap (#477):** the published root, `-android`, `-jvm` and `-iosarm64` sources jars are
+all commonMain-only and identical to each other. Diffed against `origin/dev`, the only deltas are the ones
+listed above. The validator is the one real change: `StorageModule.provideCustomHeaderValidator()` is a
+`@Single` returning `CustomHeaderValidator(DEFAULT_RESERVED_NAMES + listOf("Authorization", "User-Agent"))`,
+injected into `CustomHeadersViewModel` in place of the old `object` call. A `core:storage` test asserts
+that the *bound* instance rejects both names, and the existing ViewModel `Authorization is reserved` test
+now runs through it too. A test of the kit class alone would not catch an app binding the no-arg default.
+The per-platform `StorageModule.{android,ios,jvm}.kt` providers just switched imports; they still pass the
+app's own `DataStore` (`custom_headers_storage`), cipher (`KeystoreSecretCipher("taiga_custom_headers_key")`
+on Android, `NoopSecretCipher` on JVM/iOS) and `@StorageJsonQualifier` `Json`. `core:storage` re-exports
+the module as `api`. The local plugin, storage and validator tests were deleted (they only exercised the
+moved code). `core:api`'s `KmpNetworkModule` used `CustomHeaders`/`sanitizeCustomHeaders` from its own
+package with no import line, so an import-rename sweep misses it. It needed explicit imports added.
+**#468 is in no released build** (latest tag `v2.2.3` predates it). The upgrade was emulator-verified anyway,
+the same way as wallosmobile: a header saved on the pre-swap build read back intact after `install -r` of
+the swapped build.
 
 Dependencies: `api` on `grappim-kit-storage`, `datastore-preferences-core`,
 `ktor-client-core` and `ktor-client-logging` (all on the public API); Ktor `3.5.2`. Targets:
