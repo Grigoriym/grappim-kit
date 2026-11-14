@@ -1263,7 +1263,7 @@ not a signal anything is missing.
 
 Extracted 2026-11-14 from wallosmobile (`core/api` + `core/storage/customheaders`, #107) and
 TaigaMobileNova (same paths, #468, a port of wallosmobile's). First published in `0.1.8`
-(2026-11-14); no app swapped yet. Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
+(2026-11-14). Swapped: wallosmobile (PR #137, 2026-11-14). Plan record: `grappim-watcher/docs/SHARED_LIBRARY_PLAN.md`'s "Custom request headers"
 section. Package `com.grappim.kit.customheaders`: `CustomHeader`(+`isBlank()`),
 `CustomHeaderError`, `CustomHeaderValidator`, `CustomHeadersStorage`(+`Impl`), the
 `CustomHeaders` Ktor plugin + `CustomHeadersConfig`, `LoggingConfig.sanitizeCustomHeaders()`.
@@ -1297,6 +1297,16 @@ Differences from both apps' copies:
   `-logging` (and `customheaders`) on its test classpath, even without swapping onto
   `customheaders`. Harmless for wallosmobile/TaigaMobileNova (both already on Ktor); a
   Ktor-free consumer (wayprint) would notice. Split the fake out if that ever matters.
+
+**wallosmobile swap (#137):** published sources diffed against its `origin/dev`, and the behavior is
+identical. The only deltas are the ones listed above. `StorageModule` binds
+`CustomHeadersStorageImpl(dataStore, secretCipher, json)` and `CustomHeaderValidator()` as `@Single`
+providers. `core:storage` re-exports the module as `api`. The app's `:testing` then has no sources left;
+it only re-exports kit-testing. **Upgrade verified on an emulator:** a header was saved on a pre-swap build
+(stored as `v1:` ciphertext under `custom_headers`), then the swapped build was installed over it with
+`install -r`. The header was still listed with its value and was sent on the next request. That works
+because both builds use the same DataStore file and the same `KeystoreSecretCipher` alias. An app that
+built its storage from a different `DataStore`/cipher instance than its API key would not get this for free.
 
 Dependencies: `api` on `grappim-kit-storage`, `datastore-preferences-core`,
 `ktor-client-core` and `ktor-client-logging` (all on the public API); Ktor `3.5.2`. Targets:
