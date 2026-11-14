@@ -1292,6 +1292,11 @@ Differences from both apps' copies:
   `setHeadersCalledWith` list plus Taiga's failure switch, now `setHeadersThrows: Throwable?`
   (Taiga's was a `Boolean` throwing its own `testException`). Taiga's `setHeadersCallCount`
   becomes `setHeadersCalledWith.size`.
+- **Side effect on `grappim-kit-testing`:** it now `api`-depends on `:customheaders`, so any
+  app on `grappim-kit-testing` from the version that ships this gets `ktor-client-core`/
+  `-logging` (and `customheaders`) on its test classpath, even without swapping onto
+  `customheaders`. Harmless for wallosmobile/TaigaMobileNova (both already on Ktor); a
+  Ktor-free consumer (wayprint) would notice. Split the fake out if that ever matters.
 
 Dependencies: `api` on `grappim-kit-storage`, `datastore-preferences-core`,
 `ktor-client-core` and `ktor-client-logging` (all on the public API); Ktor `3.5.2`. Targets:

@@ -61,6 +61,10 @@ needs, in its `build.gradle.kts`:
 
 ## Porting a `commonTest` from a source app (found extracting `logger`/`coroutines`/`domain`)
 
+- `./gradlew build` on this Linux machine runs only `jvmTest`; every `ios*Test` task is
+  `SKIPPED` (no simulator), and "BUILD SUCCESSFUL" doesn't say so. To at least prove ported
+  tests compile for Kotlin/Native (the comma-in-test-name trap below), run
+  `:<module>:compileTestKotlinIosArm64` explicitly. Confirmed 2026-11-14 on `customheaders`.
 - Kotlin/Native (the `iosArm64`/`iosSimulatorArm64` test compile) rejects a comma inside a
   backtick-quoted test function name — `` `exception thrown, not propagated`() `` fails
   `compileTestKotlinIosArm64` with `Name contains illegal characters: ","`, even though the
