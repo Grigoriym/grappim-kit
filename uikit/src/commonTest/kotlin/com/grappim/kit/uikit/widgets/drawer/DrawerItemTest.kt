@@ -6,6 +6,8 @@ import com.grappim.kit.uikit.NativeText
 import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 private enum class TestDestination { Dashboard, ScrumBacklog, ScrumClosedSprints, Settings }
 
@@ -62,5 +64,38 @@ class DrawerItemTest {
         val items = persistentListOf<DrawerItem<TestDestination>>(dashboard, DrawerItem.Divider, settingsItem)
 
         assertEquals(listOf(dashboard, settingsItem), flattenForNavigationSuite(items))
+    }
+
+    @Test
+    fun `destination is primary by default`() {
+        assertTrue(dashboard.primary)
+    }
+
+    @Test
+    fun `collapsed rail shows primary destinations`() {
+        assertTrue(isShownInRail(dashboard, railExpanded = false, currentTopLevelDestination = null))
+    }
+
+    @Test
+    fun `collapsed rail hides non-primary destinations`() {
+        val secondary = scrumClosedSprints.copy(primary = false)
+
+        assertFalse(isShownInRail(secondary, railExpanded = false, currentTopLevelDestination = TestDestination.Dashboard))
+    }
+
+    @Test
+    fun `collapsed rail keeps the selected non-primary destination visible`() {
+        val secondary = scrumClosedSprints.copy(primary = false)
+
+        assertTrue(
+            isShownInRail(secondary, railExpanded = false, currentTopLevelDestination = TestDestination.ScrumClosedSprints)
+        )
+    }
+
+    @Test
+    fun `expanded rail shows non-primary destinations`() {
+        val secondary = scrumClosedSprints.copy(primary = false)
+
+        assertTrue(isShownInRail(secondary, railExpanded = true, currentTopLevelDestination = null))
     }
 }

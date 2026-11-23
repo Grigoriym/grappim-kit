@@ -13,7 +13,19 @@ import kotlinx.collections.immutable.ImmutableList
 sealed interface DrawerItem<out T> {
     data class Group<T>(val label: NativeText, val items: List<Destination<T>>) : DrawerItem<T>
 
-    data class Destination<T>(val destination: T, val label: NativeText, val icon: IconSource) : DrawerItem<T>
+    /**
+     * @param primary whether this destination stays visible while [NavigationSuiteWidget]'s wide
+     *   navigation rail is collapsed. Material caps a collapsed rail at 7 destinations; mark at most
+     *   that many as primary and the rest `false` — they appear once the rail is expanded via its
+     *   header menu button. Defaults to `true`, so a list that never sets it shows every
+     *   destination in both states. Ignored by [DrawerWidget] and by non-rail layout types.
+     */
+    data class Destination<T>(
+        val destination: T,
+        val label: NativeText,
+        val icon: IconSource,
+        val primary: Boolean = true
+    ) : DrawerItem<T>
 
     data object Divider : DrawerItem<Nothing>
 }
@@ -31,3 +43,15 @@ fun <T> flattenForNavigationSuite(items: ImmutableList<DrawerItem<T>>): List<Dra
             is DrawerItem.Divider -> emptyList()
         }
     }
+
+/**
+ * Whether [destination] is shown by [NavigationSuiteWidget]'s wide navigation rail: every destination
+ * when expanded; only [DrawerItem.Destination.primary] ones when collapsed — plus the currently
+ * selected destination, so collapsing the rail while on a secondary destination never hides the
+ * selection indicator.
+ */
+internal fun <T> isShownInRail(
+    destination: DrawerItem.Destination<T>,
+    railExpanded: Boolean,
+    currentTopLevelDestination: T?
+): Boolean = railExpanded || destination.primary || destination.destination == currentTopLevelDestination

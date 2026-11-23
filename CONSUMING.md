@@ -376,6 +376,39 @@ swaps.
   not merged, device test (phone drawer + tablet-width rail, per the peer's own request) left
   for gregory.
 
+**`NavigationSuiteWidget` became an expandable `WideNavigationRail` (2026-11-23, not yet
+released)** — requested by TaigaMobileNova (`docs/issues/2026-11-23-tablet-nav-rail-and-list-detail.md`,
+option A5): Material3's rails don't scroll, so 12 destinations clipped off short tablet/desktop
+windows. Source-compatible, but the rendering depends on which `layoutType` the caller passes:
+
+- **`layoutType = WideNavigationRailCollapsed`/`WideNavigationRailExpanded`** → the new kit-owned
+  expandable rail. A menu button in the rail header toggles it. Collapsed, it shows only destinations
+  with `DrawerItem.Destination.primary = true`, plus the currently selected destination even if it
+  isn't primary, so the selection indicator never disappears. Expanded, it shows every destination.
+  Items sit in a vertical scroll container, so an expanded rail taller than the window still reaches
+  its last item. `layoutType` sets the initial state and re-syncs it when the type changes. Otherwise
+  the user's toggle sticks (saveable).
+- **Any other type** (`NavigationRail`, `NavigationBar`, `NavigationDrawer`, short bars) → every
+  destination through the library's `NavigationSuiteScaffold(navigationItems = …)` overload, as
+  before, with no scroll and `primary` ignored. **An app passing
+  `calculateFromAdaptiveInfo(...)` (returns `NavigationRail`/`NavigationBar`) sees no change until
+  it switches to the wide-rail types itself.** `NavigationBar` now renders as
+  Material's `ShortNavigationBar` + taller height (the library's own mapping in this overload,
+  documented as visually identical). That path wasn't visually re-checked.
+- **`DrawerItem.Destination.primary: Boolean = true`** is a new trailing field. Existing construction
+  sites compile unchanged, and every destination stays visible when collapsed. To use the collapsed
+  subset, set `primary = false` on the secondary destinations rather than `true` on the primary ones.
+  Material caps a collapsed rail at 7. `DrawerWidget` ignores the field.
+- **New optional params `expandRailContentDescription`/`collapseRailContentDescription: NativeText`**
+  (the menu button's a11y label). The English defaults exist only for source compatibility, so pass
+  localized ones, the same convention as `TopBar`'s content descriptions.
+- Implementation note: the library scaffold's built-in `WideNavigationRail` has no hoisted state, so
+  the widget composes its own rail inside `NavigationSuiteScaffoldLayout`. It also re-applies the
+  per-item 4dp spacing and 64dp min height (0dp / 48dp expanded) that `WideNavigationRailLayout`
+  normally gives each direct child but loses once the items are wrapped in one scroll `Column`.
+  Visually checked with a throwaway desktop `runDesktopComposeUiTest` capture (900×900 and
+  900×500, collapsed/expanded/selected-secondary/legacy `NavigationRail`), not on a device.
+
 ## appupdate (`grappim-kit-appupdate`, `grappim-kit-appupdate-gplay`, `grappim-kit-appupdate-fdroid`)
 
 Extracted 2026-09-09 from wallosmobile's and TaigaMobileNova's near byte-identical
