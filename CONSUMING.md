@@ -262,6 +262,24 @@ behavior-preserving no-op:
   `resetTo()` note), so no test was added here either — worth adding if/when that
   infrastructure exists. Not yet swapped onto by any app.
 
+**`TopBarActionMenu` added 2026-11-23 (not yet released)**, requested by Koillectionmobile for
+its overflow menus. It takes `TopBarActionMenu(imageVector, contentDescription, items:
+ImmutableList<TopBarMenuItem>, enabled = true)` plus `TopBarMenuItem(text: NativeText,
+enabled = true, onClick)`. `TopBar` renders it as an `IconButton` that opens a `DropdownMenu`
+anchored to that button. Selecting an item closes the menu first, then calls its `onClick`.
+Whether the menu is open is `remember`ed inside `TopBar`, not part of `TopBarConfig`. Pass the
+icon yourself, typically `Icons.Filled.MoreVert`.
+
+- **Breaking for one pattern only: `onClick` moved off the `TopBarAction` interface** onto the
+  three button variants, which already declared it. Constructing actions or reading
+  `onClick` on a concrete variant still compiles. What breaks is reading
+  `onClick` through the interface type (e.g. `config.actions.first().onClick()`) or an
+  exhaustive `when` over `TopBarAction` outside the kit, which now needs an
+  `is TopBarActionMenu` branch. A grep of TaigaMobileNova, Wallosmobile and Koillectionmobile
+  on 2026-11-23 found neither pattern.
+- Verified with a throwaway desktop compose-ui-test: the popup opens directly under its button,
+  a disabled item reports `Disabled`, and a tap closes the menu and runs the item.
+
 **`widgets/drawer` added 2026-09-12** — a `grappim-watcher`-side survey looking for
 duplication `androidApp`/`composeApp` never covered (the 2026-09-09 "Step 10" survey
 scoped to `core/*` only) found wallosmobile's `WallosDrawerWidget` and TaigaMobileNova's

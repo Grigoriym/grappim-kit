@@ -3,12 +3,15 @@ package com.grappim.kit.uikit.widgets.topbar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -16,6 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,10 +110,32 @@ fun TopBar(
                                 Text(text = action.text.asString())
                             }
                         }
+
+                        is TopBarActionMenu -> TopBarMenu(action)
                     }
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun TopBarMenu(action: TopBarActionMenu) {
+    var expanded by remember { mutableStateOf(false) }
+    // The Box anchors the DropdownMenu to the IconButton rather than to the whole actions row.
+    Box {
+        IconButton(onClick = { expanded = true }, enabled = action.enabled) {
+            Icon(imageVector = action.imageVector, contentDescription = action.contentDescription)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            action.items.forEach { item ->
+                DropdownMenuItem(
+                    text = { Text(item.text.asString()) },
+                    enabled = item.enabled,
+                    onClick = { item.select(dismissMenu = { expanded = false }) }
+                )
+            }
+        }
     }
 }
 
