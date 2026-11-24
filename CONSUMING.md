@@ -262,7 +262,7 @@ behavior-preserving no-op:
   `resetTo()` note), so no test was added here either — worth adding if/when that
   infrastructure exists. Not yet swapped onto by any app.
 
-**`TopBarActionMenu` added 2026-11-23 (not yet released)**, requested by Koillectionmobile for
+**`TopBarActionMenu` added 2026-11-23, published in `0.1.9`**, requested by Koillectionmobile for
 its overflow menus. It takes `TopBarActionMenu(imageVector, contentDescription, items:
 ImmutableList<TopBarMenuItem>, enabled = true)` plus `TopBarMenuItem(text: NativeText,
 enabled = true, onClick)`. `TopBar` renders it as an `IconButton` that opens a `DropdownMenu`
@@ -394,8 +394,8 @@ swaps.
   not merged, device test (phone drawer + tablet-width rail, per the peer's own request) left
   for gregory.
 
-**`NavigationSuiteWidget` became an expandable `WideNavigationRail` (2026-11-23, not yet
-released)** — requested by TaigaMobileNova (`docs/issues/2026-11-23-tablet-nav-rail-and-list-detail.md`,
+**`NavigationSuiteWidget` became an expandable `WideNavigationRail` (2026-11-23, published
+in `0.1.9`)** — requested by TaigaMobileNova (`docs/issues/2026-11-23-tablet-nav-rail-and-list-detail.md`,
 option A5): Material3's rails don't scroll, so 12 destinations clipped off short tablet/desktop
 windows. Source-compatible, but the rendering depends on which `layoutType` the caller passes:
 
